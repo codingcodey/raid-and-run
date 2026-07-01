@@ -19,20 +19,47 @@ const KEY_DIRECTIONS: Record<string, Direction | undefined> = {
   a: "left",
 };
 const RESTART_KEYS = new Set(["Enter", " ", "r", "w", "ArrowUp"]);
+const MOVE_REPEAT_MS = 110;
+const SWIPE_THRESHOLD = 20;
 
 export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks): () => void {
-  let pointerStart: { x: number; y: number } | null = null;
-  let lastMoveAt = 0;
+  let pointerState: { id: number; start: { x: number; y: number }; didMove: boolean } | null = null;
+  let heldDirection: Direction | null = null;
+  let repeatTimer: number | null = null;
 
-  const requestMove = (direction: Direction) => {
-    const now = performance.now();
+  const moveNow = (direction: Direction) => {
+    callbacks.move(direction);
+  };
 
-    if (now - lastMoveAt < 85) {
+  const stopHeldMove = () => {
+    if (repeatTimer !== null) {
+      window.clearInterval(repeatTimer);
+      repeatTimer = null;
+    }
+
+    heldDirection = null;
+  };
+
+  const startHeldMove = (direction: Direction) => {
+    if (callbacks.getStatus() !== "playing") {
       return;
     }
 
-    lastMoveAt = now;
-    callbacks.move(direction);
+    if (heldDirection === direction && repeatTimer !== null) {
+      return;
+    }
+
+    stopHeldMove();
+    heldDirection = direction;
+    moveNow(direction);
+    repeatTimer = window.setInterval(() => {
+      if (callbacks.getStatus() !== "playing") {
+        stopHeldMove();
+        return;
+      }
+
+      moveNow(direction);
+    }, MOVE_REPEAT_MS);
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -46,7 +73,15 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
 
     if (direction) {
       event.preventDefault();
-      requestMove(direction);
+      startHeldMove(direction);
+    }
+  };
+
+  const onKeyUp = (event: KeyboardEvent) => {
+    const direction = KEY_DIRECTIONS[event.key] ?? KEY_DIRECTIONS[event.key.toLowerCase()];
+
+    if (direction && direction === heldDirection) {
+      stopHeldMove();
     }
   };
 
@@ -55,28 +90,58 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
       return;
     }
 
-    pointerStart = toCanvasPoint(canvas, event.clientX, event.clientY);
+    const point = toCanvasPoint(canvas, event.clientX, event.clientY);
+    pointerState = { id: event.pointerId, start: point, didMove: false };
     canvas.setPointerCapture(event.pointerId);
+
+    const tappedCell = canvasPointToCell(point.x, point.y);
+    const direction = tappedCell ? directionFromCells(callbacks.getPlayer(), tappedCell) : null;
+
+    if (direction) {
+      pointerState.didMove = true;
+      startHeldMove(direction);
+    }
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!event.isPrimary || !pointerState || pointerState.id !== event.pointerId) {
+      return;
+    }
+
+    const point = toCanvasPoint(canvas, event.clientX, event.clientY);
+    const deltaX = point.x - pointerState.start.x;
+    const deltaY = point.y - pointerState.start.y;
+
+    if (Math.hypot(deltaX, deltaY) >= SWIPE_THRESHOLD) {
+      pointerState.didMove = true;
+      startHeldMove(directionFromDelta(deltaX, deltaY));
+    }
   };
 
   const onPointerUp = (event: PointerEvent) => {
-    if (!event.isPrimary || !pointerStart) {
+    if (!event.isPrimary || !pointerState || pointerState.id !== event.pointerId) {
       return;
     }
 
     const pointerEnd = toCanvasPoint(canvas, event.clientX, event.clientY);
-    const deltaX = pointerEnd.x - pointerStart.x;
-    const deltaY = pointerEnd.y - pointerStart.y;
+    const deltaX = pointerEnd.x - pointerState.start.x;
+    const deltaY = pointerEnd.y - pointerState.start.y;
     const distance = Math.hypot(deltaX, deltaY);
-    pointerStart = null;
+    const didMove = pointerState.didMove;
+    pointerState = null;
+    stopHeldMove();
 
     if (callbacks.getStatus() === "gameOver") {
       callbacks.restart();
       return;
     }
 
-    if (distance >= 20) {
-      requestMove(directionFromDelta(deltaX, deltaY));
+    if (didMove) {
+      return;
+    }
+
+    if (distance >= SWIPE_THRESHOLD) {
+      moveNow(directionFromDelta(deltaX, deltaY));
       return;
     }
 
@@ -86,22 +151,28 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
       const direction = directionFromCells(callbacks.getPlayer(), tappedCell);
 
       if (direction) {
-        requestMove(direction);
+        moveNow(direction);
       }
     }
   };
   const onPointerCancel = () => {
-    pointerStart = null;
+    pointerState = null;
+    stopHeldMove();
   };
 
   window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
   canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
   canvas.addEventListener("pointerup", onPointerUp);
   canvas.addEventListener("pointercancel", onPointerCancel);
 
   return () => {
+    stopHeldMove();
     window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("keyup", onKeyUp);
     canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onPointerMove);
     canvas.removeEventListener("pointerup", onPointerUp);
     canvas.removeEventListener("pointercancel", onPointerCancel);
   };
