@@ -262,7 +262,7 @@ describe("fireballs", () => {
     expect(topSpeed).toBeCloseTo(1.8);
   });
 
-  it("forces the next five fireballs to be normal and spawn one second apart after a bending fireball", () => {
+  it("forces the next five fireballs to be normal and spawn 1.5 seconds apart after a bending fireball", () => {
     const state: GameState = {
       ...baseState(),
       score: 1,
@@ -271,7 +271,7 @@ describe("fireballs", () => {
     };
 
     const afterBending = updateGame(state, 1.5, sequenceRandom([0.99, 0, 0.01]));
-    const afterForcedNormals = updateGame(afterBending, 5, fixedRandom(0));
+    const afterForcedNormals = updateGame(afterBending, 7.5, fixedRandom(0));
 
     expect(afterBending.fireballs[0].kind).toBe("bending");
     expect(afterBending.bendingFireballCooldown).toBe(BENDING_FIREBALL_COOLDOWN_SPAWNS);
