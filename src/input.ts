@@ -19,12 +19,14 @@ const KEY_DIRECTIONS: Record<string, Direction | undefined> = {
   a: "left",
 };
 const RESTART_KEYS = new Set(["Enter", " ", "r", "w", "ArrowUp"]);
-const MOVE_REPEAT_MS = 110;
+const HOLD_REPEAT_DELAY_MS = 225;
+const MOVE_REPEAT_MS = 135;
 const SWIPE_THRESHOLD = 20;
 
 export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks): () => void {
   let pointerState: { id: number; start: { x: number; y: number }; didMove: boolean } | null = null;
   let heldDirection: Direction | null = null;
+  let repeatDelayTimer: number | null = null;
   let repeatTimer: number | null = null;
 
   const moveNow = (direction: Direction) => {
@@ -32,6 +34,11 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
   };
 
   const stopHeldMove = () => {
+    if (repeatDelayTimer !== null) {
+      window.clearTimeout(repeatDelayTimer);
+      repeatDelayTimer = null;
+    }
+
     if (repeatTimer !== null) {
       window.clearInterval(repeatTimer);
       repeatTimer = null;
@@ -45,21 +52,38 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
       return;
     }
 
-    if (heldDirection === direction && repeatTimer !== null) {
+    if (heldDirection === direction && (repeatDelayTimer !== null || repeatTimer !== null)) {
       return;
     }
 
     stopHeldMove();
     heldDirection = direction;
     moveNow(direction);
-    repeatTimer = window.setInterval(() => {
-      if (callbacks.getStatus() !== "playing") {
+    repeatDelayTimer = window.setTimeout(() => {
+      repeatDelayTimer = null;
+
+      if (callbacks.getStatus() !== "playing" || heldDirection !== direction) {
         stopHeldMove();
         return;
       }
 
-      moveNow(direction);
-    }, MOVE_REPEAT_MS);
+      repeatTimer = window.setInterval(() => {
+        if (callbacks.getStatus() !== "playing") {
+          stopHeldMove();
+          return;
+        }
+
+        moveNow(direction);
+      }, MOVE_REPEAT_MS);
+    }, HOLD_REPEAT_DELAY_MS);
+  };
+
+  const changeHeldDirection = (direction: Direction) => {
+    if (heldDirection === direction) {
+      return;
+    }
+
+    startHeldMove(direction);
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -114,7 +138,7 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
 
     if (Math.hypot(deltaX, deltaY) >= SWIPE_THRESHOLD) {
       pointerState.didMove = true;
-      startHeldMove(directionFromDelta(deltaX, deltaY));
+      changeHeldDirection(directionFromDelta(deltaX, deltaY));
     }
   };
 
