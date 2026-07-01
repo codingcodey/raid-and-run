@@ -2,6 +2,10 @@
 
 A pixel-art browser game built with Vite, TypeScript, and Canvas.
 
+## Play
+
+https://codingcodey.github.io/raid-and-run/
+
 ## Local Development
 
 ```sh
