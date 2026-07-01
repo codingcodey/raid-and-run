@@ -1,6 +1,6 @@
 import { assetPath } from "./asset-path";
 import { GRID_SIZE, type Cell, type Edge, type Fireball, type GameState } from "./types";
-import { getFireballPosition } from "./game";
+import { BENDING_FIREBALL_SCALE, getFireballPosition, getFireballRotation } from "./game";
 
 export const CANVAS_WIDTH = 420;
 export const CANVAS_HEIGHT = 620;
@@ -375,8 +375,10 @@ function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], ela
     const position = getFireballPosition(fireball);
     const x = GRID_LEFT + position.col * GRID_STRIDE + CELL_SIZE / 2;
     const y = GRID_TOP + position.row * GRID_STRIDE + CELL_SIZE / 2;
-    if (!drawFireballSprite(ctx, fireball.edge, x, y, elapsed + fireball.id * 0.013)) {
-      drawFireball(ctx, x, y, elapsed + fireball.id, 1);
+    const scale = fireball.kind === "bending" ? BENDING_FIREBALL_SCALE : 1;
+    const rotation = getFireballRotation(fireball);
+    if (!drawFireballSprite(ctx, fireball.edge, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
+      drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
     }
   }
 }
@@ -387,6 +389,8 @@ function drawFireballSprite(
   centerX: number,
   centerY: number,
   elapsed: number,
+  scale: number,
+  rotation: number,
 ): boolean {
   const { frames, height } = fireballSpriteConfigs[edge];
   const frame = frames[Math.floor(elapsed / FIREBALL_FRAME_SECONDS) % frames.length];
@@ -395,19 +399,32 @@ function drawFireballSprite(
     return false;
   }
 
-  const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * height);
+  const scaledHeight = Math.round(height * scale);
+  const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * scaledHeight);
+  ctx.save();
+  ctx.translate(Math.round(centerX), Math.round(centerY));
+  ctx.rotate(rotation);
   ctx.drawImage(
     frame.image,
-    Math.round(centerX - width / 2),
-    Math.round(centerY - height / 2),
+    Math.round(-width / 2),
+    Math.round(-scaledHeight / 2),
     width,
-    height,
+    scaledHeight,
   );
+  ctx.restore();
 
   return true;
 }
 
-function drawFireball(ctx: CanvasRenderingContext2D, x: number, y: number, phase: number, scale: number): void {
+function drawFireball(ctx: CanvasRenderingContext2D, x: number, y: number, phase: number, scale: number, rotation: number): void {
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.rotate(rotation);
+  drawProceduralFireball(ctx, 0, 0, phase, scale);
+  ctx.restore();
+}
+
+function drawProceduralFireball(ctx: CanvasRenderingContext2D, x: number, y: number, phase: number, scale: number): void {
   const s = Math.round(4 * scale);
   const flicker = Math.sin(phase * 13) > 0 ? s : 0;
 

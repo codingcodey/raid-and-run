@@ -14,6 +14,12 @@ export interface Fireball {
   id: number;
   edge: Edge;
   lane: number;
+  kind: "normal" | "bending";
+  targetLane: number;
+  row: number;
+  col: number;
+  velocityRow: number;
+  velocityCol: number;
   age: number;
   warningDuration: number;
   travelDuration: number;
@@ -33,6 +39,7 @@ export interface GameState {
   fireballSpawnClock: number;
   nextFireballDelay: number;
   nextFireballId: number;
+  bendingFireballCooldown: number;
 }
 
 export interface RecordsSnapshot {

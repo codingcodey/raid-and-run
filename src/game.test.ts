@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BENDING_FIREBALL_COOLDOWN_SPAWNS,
+  BENDING_FIREBALL_FORCED_DELAY,
+  BENDING_FIREBALL_MAX_ANGLE_RADIANS,
+  BENDING_FIREBALL_MAX_TRAVEL_SECONDS,
+  BENDING_FIREBALL_SCALE,
+  BENDING_FIREBALL_SPEED_RATIO,
+  BENDING_FIREBALL_TURN_RESPONSE,
   createFireball,
   createInitialGameState,
+  createSpawnedFireball,
   FIREBALL_WARNING_DURATION,
+  FIREBALL_COLLISION_RADIUS,
   fireballHitsCell,
   getFireballPosition,
+  getFireballRotation,
   movePlayer,
   scheduleFireballDelay,
   scheduleFireballTravelDuration,
@@ -32,6 +42,24 @@ function sequenceRandom(values: number[]): () => number {
 
 function baseState(): GameState {
   return createInitialGameState(records, fixedRandom(0));
+}
+
+function fireballFixture(overrides: Partial<Fireball> = {}): Fireball {
+  return {
+    id: 1,
+    edge: "left",
+    lane: 2,
+    kind: "normal",
+    targetLane: 2,
+    row: 2,
+    col: -2.5,
+    velocityRow: 0,
+    velocityCol: 1,
+    age: 0,
+    warningDuration: FIREBALL_WARNING_DURATION,
+    travelDuration: scheduleFireballTravelDuration(1),
+    ...overrides,
+  };
 }
 
 describe("game setup", () => {
@@ -154,17 +182,132 @@ describe("fireballs", () => {
     expect(fireball.edge).toBe("left");
     expect(fireball.lane).toBe(4);
     expect(fireball.id).toBe(7);
+    expect(fireball.kind).toBe("normal");
+  });
+
+  it("can spawn a rare bending fireball that curves toward the player lane without exceeding 45 degrees", () => {
+    const fireball = createSpawnedFireball(1, 7, { row: 4, col: 2 }, true, sequenceRandom([0.99, 0, 0.01]));
+
+    expect(fireball.edge).toBe("left");
+    expect(fireball.lane).toBe(0);
+    expect(fireball.kind).toBe("bending");
+    expect(fireball.targetLane).toBe(4);
+    const normalSpeed = 9 / scheduleFireballTravelDuration(1);
+    const bendingSpeed = Math.hypot(fireball.velocityRow, fireball.velocityCol);
+
+    expect(BENDING_FIREBALL_SPEED_RATIO).toBe(0.35);
+    expect(fireball.travelDuration).toBe(BENDING_FIREBALL_MAX_TRAVEL_SECONDS);
+    expect(bendingSpeed).toBeCloseTo(normalSpeed * BENDING_FIREBALL_SPEED_RATIO);
+
+    const movingState = updateGame(
+      {
+        ...baseState(),
+        score: 1,
+        player: { row: 4, col: 2 },
+        fireballs: [fireball],
+        nextFireballDelay: 100,
+      },
+      FIREBALL_WARNING_DURATION + fireball.travelDuration / 2,
+      fixedRandom(0),
+    );
+    const movedFireball = movingState.fireballs[0];
+    const middlePosition = getFireballPosition(movedFireball);
+
+    expect(BENDING_FIREBALL_MAX_ANGLE_RADIANS).toBe(Math.PI / 4);
+    expect(BENDING_FIREBALL_TURN_RESPONSE).toBe(0.75);
+    expect(middlePosition.row).toBeGreaterThan(0);
+    expect(middlePosition.row).toBeLessThan(4);
+    expect(getFireballRotation(movedFireball)).toBeGreaterThan(0);
+  });
+
+  it("chases the player's current location from any edge without hopping lanes or changing speed", () => {
+    const leftFireball = fireballFixture({
+      edge: "left",
+      lane: 0,
+      kind: "bending",
+      targetLane: 0,
+      row: 0,
+      col: -2.5,
+      velocityRow: 0,
+      velocityCol: 1.8,
+      age: FIREBALL_WARNING_DURATION,
+      travelDuration: BENDING_FIREBALL_MAX_TRAVEL_SECONDS,
+    });
+    const topFireball = fireballFixture({
+      ...leftFireball,
+      id: 2,
+      edge: "up",
+      row: -2.5,
+      col: 0,
+      velocityRow: 1.8,
+      velocityCol: 0,
+    });
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      player: { row: 4, col: 3 },
+      fireballs: [leftFireball, topFireball],
+      nextFireballDelay: 100,
+    };
+
+    const nextState = updateGame(state, 0.25, fixedRandom(0));
+    const leftSpeed = Math.hypot(nextState.fireballs[0].velocityRow, nextState.fireballs[0].velocityCol);
+    const topSpeed = Math.hypot(nextState.fireballs[1].velocityRow, nextState.fireballs[1].velocityCol);
+
+    expect(nextState.fireballs[0].targetLane).toBe(4);
+    expect(nextState.fireballs[1].targetLane).toBe(3);
+    expect(nextState.fireballs[0].row).toBeGreaterThan(0);
+    expect(nextState.fireballs[0].row).toBeLessThan(0.2);
+    expect(leftSpeed).toBeCloseTo(1.8);
+    expect(topSpeed).toBeCloseTo(1.8);
+  });
+
+  it("forces the next five fireballs to be normal and spawn one second apart after a bending fireball", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      player: { row: 4, col: 4 },
+      nextFireballDelay: scheduleFireballDelay(1),
+    };
+
+    const afterBending = updateGame(state, 1.5, sequenceRandom([0.99, 0, 0.01]));
+    const afterForcedNormals = updateGame(afterBending, 5, fixedRandom(0));
+
+    expect(afterBending.fireballs[0].kind).toBe("bending");
+    expect(afterBending.bendingFireballCooldown).toBe(BENDING_FIREBALL_COOLDOWN_SPAWNS);
+    expect(afterBending.nextFireballDelay).toBe(BENDING_FIREBALL_FORCED_DELAY);
+    expect(afterForcedNormals.fireballs.filter((fireball) => fireball.kind === "normal")).toHaveLength(5);
+    expect(afterForcedNormals.fireballs.filter((fireball) => fireball.kind === "bending")).toHaveLength(1);
+    expect(afterForcedNormals.bendingFireballCooldown).toBe(0);
+    expect(afterForcedNormals.nextFireballDelay).toBe(scheduleFireballDelay(1));
+  });
+
+  it("uses a smaller hitbox for bending fireballs", () => {
+    const fireball = fireballFixture({
+      lane: 0,
+      kind: "bending",
+      targetLane: 4,
+      row: 1,
+      col: 1,
+      velocityRow: 0,
+      velocityCol: 1.8,
+      age: FIREBALL_WARNING_DURATION,
+      travelDuration: BENDING_FIREBALL_MAX_TRAVEL_SECONDS,
+    });
+    const position = getFireballPosition(fireball);
+    const nearCell = { row: Math.round(position.row), col: Math.round(position.col) };
+
+    expect(BENDING_FIREBALL_SCALE).toBe(0.75);
+    expect(FIREBALL_COLLISION_RADIUS * BENDING_FIREBALL_SCALE).toBeLessThan(FIREBALL_COLLISION_RADIUS);
+    expect(fireballHitsCell(fireball, nearCell)).toBe(true);
   });
 
   it("warns outside the grid before becoming dangerous", () => {
-    const fireball: Fireball = {
-      id: 1,
+    const fireball = fireballFixture({
       edge: "left",
       lane: 2,
       age: FIREBALL_WARNING_DURATION / 2,
-      warningDuration: FIREBALL_WARNING_DURATION,
-      travelDuration: scheduleFireballTravelDuration(1),
-    };
+    });
 
     const position = getFireballPosition(fireball);
 
@@ -175,14 +318,12 @@ describe("fireballs", () => {
 
   it("travels through its lane and hits the player", () => {
     const travelDuration = scheduleFireballTravelDuration(1);
-    const fireball: Fireball = {
-      id: 1,
+    const fireball = fireballFixture({
       edge: "left",
       lane: 2,
       age: FIREBALL_WARNING_DURATION + travelDuration / 2,
-      warningDuration: FIREBALL_WARNING_DURATION,
       travelDuration,
-    };
+    });
 
     const state: GameState = {
       ...baseState(),
@@ -198,14 +339,13 @@ describe("fireballs", () => {
 
   it("disappears after crossing to the opposite side", () => {
     const travelDuration = scheduleFireballTravelDuration(1);
-    const fireball: Fireball = {
-      id: 1,
+    const fireball = fireballFixture({
       edge: "up",
       lane: 4,
+      targetLane: 4,
       age: FIREBALL_WARNING_DURATION + travelDuration - 0.01,
-      warningDuration: FIREBALL_WARNING_DURATION,
       travelDuration,
-    };
+    });
     const state: GameState = {
       ...baseState(),
       player: { row: 0, col: 0 },
