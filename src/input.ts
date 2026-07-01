@@ -3,6 +3,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, canvasPointToCell } from "./render";
 
 interface InputCallbacks {
   move(direction: Direction): void;
+  togglePause(): void;
   restart(): void;
   getPlayer(): Cell;
   getStatus(): GameStatus;
@@ -19,6 +20,7 @@ const KEY_DIRECTIONS: Record<string, Direction | undefined> = {
   a: "left",
 };
 const RESTART_KEYS = new Set(["Enter", " ", "r", "w", "ArrowUp"]);
+const PAUSE_KEYS = new Set(["p"]);
 const HOLD_REPEAT_DELAY_MS = 225;
 const MOVE_REPEAT_MS = 135;
 const SWIPE_THRESHOLD = 20;
@@ -90,6 +92,15 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
     if (callbacks.getStatus() === "gameOver" && isRestartKey(event.key)) {
       event.preventDefault();
       callbacks.restart();
+      return;
+    }
+
+    if (isPauseKey(event.key)) {
+      event.preventDefault();
+      if (!event.repeat) {
+        stopHeldMove();
+        callbacks.togglePause();
+      }
       return;
     }
 
@@ -204,6 +215,10 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
 
 function isRestartKey(key: string): boolean {
   return RESTART_KEYS.has(key) || RESTART_KEYS.has(key.toLowerCase());
+}
+
+function isPauseKey(key: string): boolean {
+  return PAUSE_KEYS.has(key.toLowerCase());
 }
 
 function toCanvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number): { x: number; y: number } {

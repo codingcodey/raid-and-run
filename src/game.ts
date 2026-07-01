@@ -150,6 +150,14 @@ export function isPlayerHit(state: GameState): boolean {
 }
 
 export function scheduleFireballDelay(score: number): number {
+  if (score >= 100) {
+    return 0.4;
+  }
+
+  if (score >= 75) {
+    return 0.5;
+  }
+
   if (score >= 50) {
     return 0.6;
   }

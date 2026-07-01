@@ -13,13 +13,15 @@ const MAX_FRAME_SECONDS = 0.12;
 
 const canvasElement = document.querySelector<HTMLCanvasElement>("#game");
 const restartButtonElement = document.querySelector<HTMLButtonElement>("#restart");
+const pauseButtonElement = document.querySelector<HTMLButtonElement>("#pause");
 
-if (!canvasElement || !restartButtonElement) {
+if (!canvasElement || !restartButtonElement || !pauseButtonElement) {
   throw new Error("Raid and Run failed to mount.");
 }
 
 const canvas = canvasElement;
 const restartButton = restartButtonElement;
+const pauseButton = pauseButtonElement;
 
 canvas.width = CANVAS_WIDTH;
 canvas.height = CANVAS_HEIGHT;
@@ -45,11 +47,30 @@ const restart = () => {
   state = createInitialGameState(records.load());
   audio.reset(state);
   audio.playButtonClick();
-  syncRestartButton();
+  syncControls();
+  canvas.focus({ preventScroll: true });
+};
+
+const togglePause = () => {
+  if (state.gameStatus === "gameOver") {
+    return;
+  }
+
+  audio.unlock(state);
+  audio.playButtonClick();
+  state = {
+    ...state,
+    gameStatus: state.gameStatus === "paused" ? "playing" : "paused",
+  };
+  syncControls();
   canvas.focus({ preventScroll: true });
 };
 
 const dispatchMove = (direction: Direction) => {
+  if (state.gameStatus !== "playing") {
+    return;
+  }
+
   const previousStatus = state.gameStatus;
   const previousScore = state.score;
   audio.unlock(state);
@@ -67,18 +88,20 @@ const dispatchMove = (direction: Direction) => {
 
 bindInput(canvas, {
   move: dispatchMove,
+  togglePause,
   restart,
   getPlayer: () => state.player,
   getStatus: () => state.gameStatus,
 });
 
 restartButton.addEventListener("click", restart);
+pauseButton.addEventListener("click", togglePause);
 canvas.addEventListener("pointerdown", () => audio.unlock(state));
 canvas.addEventListener("click", () => {
   audio.unlock(state);
   canvas.focus({ preventScroll: true });
 });
-syncRestartButton();
+syncControls();
 requestAnimationFrame(tick);
 
 function tick(now: number): void {
@@ -116,12 +139,15 @@ function commitGameOver(previousStatus: GameState["gameStatus"]): void {
   if (previousStatus === "playing" && state.gameStatus === "gameOver") {
     state = withRecords(state, records.save(state.score));
     audio.playDeathSequence();
-    syncRestartButton();
+    syncControls();
   }
 }
 
-function syncRestartButton(): void {
+function syncControls(): void {
   restartButton.classList.toggle("is-visible", state.gameStatus === "gameOver");
+  pauseButton.classList.toggle("is-hidden", state.gameStatus === "gameOver");
+  pauseButton.classList.toggle("is-paused", state.gameStatus === "paused");
+  pauseButton.setAttribute("aria-pressed", String(state.gameStatus === "paused"));
 }
 
 function createRecordsStore(): RecordsStore {

@@ -3,7 +3,7 @@ export const CENTER_CELL = 2;
 
 export type Direction = "up" | "right" | "down" | "left";
 export type Edge = Direction;
-export type GameStatus = "playing" | "gameOver";
+export type GameStatus = "playing" | "paused" | "gameOver";
 
 export interface Cell {
   row: number;

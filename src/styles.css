@@ -81,3 +81,51 @@ canvas {
   outline: 4px solid #ffe66d;
   outline-offset: 4px;
 }
+
+.pause-button {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 4px solid #102033;
+  border-radius: 0;
+  background: rgba(21, 33, 44, 0.7);
+  cursor: pointer;
+  font-size: 0;
+  color: transparent;
+  image-rendering: pixelated;
+}
+
+.pause-button::before,
+.pause-button::after {
+  position: absolute;
+  top: 13px;
+  width: 6px;
+  height: 24px;
+  background: #ffffff;
+  content: "";
+}
+
+.pause-button::before {
+  left: 14px;
+}
+
+.pause-button::after {
+  right: 14px;
+}
+
+.pause-button.is-paused {
+  background: rgba(42, 58, 70, 0.9);
+}
+
+.pause-button.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pause-button:focus-visible {
+  outline: 4px solid #ffe66d;
+  outline-offset: 4px;
+}

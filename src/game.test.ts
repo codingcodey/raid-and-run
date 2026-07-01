@@ -123,7 +123,7 @@ describe("fireballs", () => {
     expect(afterDelay.fireballs[0].age).toBe(0);
   });
 
-  it("uses faster fireball spawn intervals at 10, 25, and 50 points", () => {
+  it("uses faster fireball spawn intervals at 10, 25, 50, 75, and 100 points", () => {
     const state: GameState = {
       ...baseState(),
       score: 25,
@@ -140,6 +140,10 @@ describe("fireballs", () => {
     expect(scheduleFireballDelay(25)).toBe(0.8);
     expect(scheduleFireballDelay(49)).toBe(0.8);
     expect(scheduleFireballDelay(50)).toBe(0.6);
+    expect(scheduleFireballDelay(74)).toBe(0.6);
+    expect(scheduleFireballDelay(75)).toBe(0.5);
+    expect(scheduleFireballDelay(99)).toBe(0.5);
+    expect(scheduleFireballDelay(100)).toBe(0.4);
     expect(beforeDelay.fireballs).toHaveLength(0);
     expect(afterDelay.fireballs).toHaveLength(1);
   });

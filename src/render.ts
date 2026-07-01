@@ -174,6 +174,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): voi
   drawPlayer(ctx, state, state.gameStatus === "gameOver");
   drawHud(ctx, state);
 
+  if (state.gameStatus === "paused") {
+    drawPauseOverlay(ctx);
+  }
+
   if (state.gameStatus === "gameOver") {
     drawGameOver(ctx, state);
   }
@@ -214,6 +218,11 @@ function drawSnow(ctx: CanvasRenderingContext2D, elapsed: number): void {
     ctx.fillStyle = `rgba(245, 250, 252, ${alpha})`;
     ctx.fillRect(x, y, pixelSize, pixelSize);
   }
+}
+
+function drawPauseOverlay(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = "rgba(180, 190, 195, 0.22)";
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
