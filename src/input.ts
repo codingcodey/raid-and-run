@@ -252,3 +252,4 @@ function directionFromCells(player: Cell, target: Cell): Direction | null {
 
   return deltaRow > 0 ? "down" : "up";
 }
+setTimeout(0.1)
