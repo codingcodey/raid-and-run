@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: Raid and Run — Canvas Arcade Game
+title: Raid and Run — Browser Arcade Game
 scope:
     - README.md
     - .gitignore
