@@ -1,0 +1,1 @@
+`npm run dev` starts the Vite dev server bound to `0.0.0.0` (for container access); `npm run build` runs `tsc` first then `vite build`; `npm test` / `npm run test:watch` drive Vitest. No external runtime dependencies — everything ships from `node_modules`.

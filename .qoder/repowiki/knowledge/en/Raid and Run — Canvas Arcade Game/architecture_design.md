@@ -1,0 +1,7 @@
+Single-page Vite + TypeScript application built as a classic fixed-timestep loop. `src/main.ts` is the only entry point: it wires DOM elements, creates a `RecordsStore` (preferring `LocalRecordsStore` backed by `window.localStorage`, falling back to `MemoryRecordsStore`), instantiates `GameAudio`, then drives a `requestAnimationFrame` loop that accumulates time into `FIXED_STEP_SECONDS = 1/60` and calls pure-state functions from `game.ts`. The module boundary is strictly one-way:
+- `types.ts` owns all shared interfaces (`GameState`, `Fireball`, `Cell`, `RecordsStore`) and constants (`GRID_SIZE=5`, `CENTER_CELL=2`).
+- `game.ts` is a pure-function state machine: `createInitialGameState`, `movePlayer`, `updateGame`, `withRecords` take an immutable `GameState` and return a new one; randomness is injected via an optional `RandomSource` parameter so tests can be deterministic.
+- `render.ts` is read-only against `GameState`; it owns canvas dimensions and sprite loading, drawing procedurally when assets are unavailable.
+- `input.ts` / `audio.ts` / `asset-path.ts` / `random.ts` are leaf helpers consumed by `main.ts`.
+- `records.ts` implements the `RecordsStore` interface with two concrete stores, decoupling persistence from the game loop.
+There is no framework layer beyond Vite; `vite.config.ts` sets `base: "./"` for static hosting, and `tsconfig.json` targets ES2020 with strict mode and `noEmit` (Vite handles compilation).

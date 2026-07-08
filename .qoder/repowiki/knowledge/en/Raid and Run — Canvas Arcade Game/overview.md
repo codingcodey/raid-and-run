@@ -1,0 +1,1 @@
+A browser-based arcade game where a player dodges straight and bending fireballs on a 5×5 grid, collecting coins to raise the score while high scores persist in localStorage.

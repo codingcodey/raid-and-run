@@ -1,0 +1,1 @@
+TypeScript 6 + Vite 8 (ESM, bundler module resolution) with Vitest 3 for unit tests; Canvas 2D API for rendering; Web Audio API for sound; `localStorage` for persistent best/world records.

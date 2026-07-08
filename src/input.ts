@@ -1,6 +1,13 @@
 import type { Cell, Direction, GameStatus } from "./types";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, canvasPointToCell } from "./render";
 
+const DPAD_DIRECTION_MAP: Record<string, Direction> = {
+  up: "up",
+  down: "down",
+  left: "left",
+  right: "right",
+};
+
 interface InputCallbacks {
   move(direction: Direction): void;
   togglePause(): void;
@@ -195,6 +202,63 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
     stopHeldMove();
   };
 
+  const dpadButtons = canvas.parentElement
+    ? Array.from(canvas.parentElement.querySelectorAll<HTMLButtonElement>(".dpad-btn"))
+    : [];
+  const dpadCleanups: Array<() => void> = [];
+
+  for (const button of dpadButtons) {
+    const direction = DPAD_DIRECTION_MAP[button.dataset.direction ?? ""];
+    if (!direction) {
+      continue;
+    }
+
+    const onPress = (event: PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      button.setPointerCapture(event.pointerId);
+      button.classList.add("is-pressed");
+      if (callbacks.getStatus() === "gameOver") {
+        callbacks.restart();
+        return;
+      }
+      startHeldMove(direction);
+    };
+
+    const onRelease = (event: PointerEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        button.releasePointerCapture(event.pointerId);
+      } catch {
+        // Already released.
+      }
+      button.classList.remove("is-pressed");
+      if (heldDirection === direction) {
+        stopHeldMove();
+      }
+    };
+
+    const onCancel = () => {
+      button.classList.remove("is-pressed");
+      if (heldDirection === direction) {
+        stopHeldMove();
+      }
+    };
+
+    button.addEventListener("pointerdown", onPress);
+    button.addEventListener("pointerup", onRelease);
+    button.addEventListener("pointercancel", onCancel);
+    button.addEventListener("contextmenu", (event) => event.preventDefault());
+
+    dpadCleanups.push(() => {
+      button.removeEventListener("pointerdown", onPress);
+      button.removeEventListener("pointerup", onRelease);
+      button.removeEventListener("pointercancel", onCancel);
+      button.classList.remove("is-pressed");
+    });
+  }
+
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   canvas.addEventListener("pointerdown", onPointerDown);
@@ -210,6 +274,9 @@ export function bindInput(canvas: HTMLCanvasElement, callbacks: InputCallbacks):
     canvas.removeEventListener("pointermove", onPointerMove);
     canvas.removeEventListener("pointerup", onPointerUp);
     canvas.removeEventListener("pointercancel", onPointerCancel);
+    for (const cleanup of dpadCleanups) {
+      cleanup();
+    }
   };
 }
 

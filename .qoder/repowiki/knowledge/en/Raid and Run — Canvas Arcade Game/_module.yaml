@@ -1,0 +1,17 @@
+schema_version: 1
+module_path: ""
+title: Raid and Run — Canvas Arcade Game
+scope:
+    - README.md
+    - .gitignore
+    - index.html
+    - package.json
+    - tsconfig.json
+    - vite.config.ts
+    - src/
+    - .github/workflows/deploy.yml
+    - LICENSE
+    - package-lock.json
+source_files: []
+depends_on: []
+related_to: []

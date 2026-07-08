@@ -1,0 +1,5 @@
+- Game logic is expressed as pure functions that accept the current `GameState` plus optional injectable dependencies (e.g. `RandomSource = Math.random`) and return a new state object rather than mutating in place.
+- Shared domain types and constants live in `types.ts` and are imported by every other module; cross-module contracts are typed via interfaces (`RecordsStore`, `RandomSource`) instead of direct implementation coupling.
+- Asset references go through the `assetPath()` helper from `asset-path.ts` rather than bare string paths, centralizing asset URL construction.
+- Sprite resources are loaded lazily into `{ image, ready }` frames with a procedural fallback drawn when the image is not yet available, keeping the render path safe across load phases.
+- Numeric tuning constants (fireball speeds, durations, collision radii, HUD pixel offsets) are exported as top-level `const`s at the top of their owning file instead of being inlined.
