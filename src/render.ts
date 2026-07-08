@@ -119,6 +119,7 @@ const warningSprites = createNumberedSpriteFrames("assets/warning", 3);
 const gameOverBanner = createSpriteFrame(assetPath("assets/game-over-banner.png"));
 const scoreBanner = createSpriteFrame(assetPath("assets/score-banner.png"));
 const fireballLeftSprites = createNumberedSpriteFrames("assets/fireball-left", 4);
+const bendingFireballSprites = createNumberedSpriteFrames("assets/bending-fireball", 4);
 const fireballRightSprites = createNumberedSpriteFrames("assets/fireball-right", 4);
 const fireballBottomSprites = createNumberedSpriteFrames("assets/fireball-bottom", 4);
 const fireballTopSprites = createNumberedSpriteFrames("assets/fireball-top", 4);
@@ -375,10 +376,19 @@ function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], ela
     const position = getFireballPosition(fireball);
     const x = GRID_LEFT + position.col * GRID_STRIDE + CELL_SIZE / 2;
     const y = GRID_TOP + position.row * GRID_STRIDE + CELL_SIZE / 2;
-    const scale = fireball.kind === "bending" ? BENDING_FIREBALL_SCALE : 1;
-    const rotation = getFireballRotation(fireball);
-    if (!drawFireballSprite(ctx, fireball.edge, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
-      drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
+
+    if (fireball.kind === "bending") {
+      const scale = BENDING_FIREBALL_SCALE;
+      const rotation = Math.atan2(fireball.velocityRow, fireball.velocityCol);
+      if (!drawBendingFireballSprite(ctx, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
+        drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
+      }
+    } else {
+      const scale = 1;
+      const rotation = getFireballRotation(fireball);
+      if (!drawFireballSprite(ctx, fireball.edge, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
+        drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
+      }
     }
   }
 }
@@ -399,6 +409,38 @@ function drawFireballSprite(
     return false;
   }
 
+  const scaledHeight = Math.round(height * scale);
+  const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * scaledHeight);
+  ctx.save();
+  ctx.translate(Math.round(centerX), Math.round(centerY));
+  ctx.rotate(rotation);
+  ctx.drawImage(
+    frame.image,
+    Math.round(-width / 2),
+    Math.round(-scaledHeight / 2),
+    width,
+    scaledHeight,
+  );
+  ctx.restore();
+
+  return true;
+}
+
+function drawBendingFireballSprite(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  elapsed: number,
+  scale: number,
+  rotation: number,
+): boolean {
+  const frame = bendingFireballSprites[Math.floor(elapsed / FIREBALL_FRAME_SECONDS) % bendingFireballSprites.length];
+
+  if (!frame.ready || !frame.image || frame.image.naturalWidth === 0) {
+    return false;
+  }
+
+  const height = FIREBALL_SIDE_HEIGHT;
   const scaledHeight = Math.round(height * scale);
   const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * scaledHeight);
   ctx.save();
