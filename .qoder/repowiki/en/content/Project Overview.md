@@ -17,6 +17,12 @@
 - [src/random.ts](file://src/random.ts)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated documentation structure to reflect file organization improvements
+- Maintained comprehensive coverage of game mechanics and architecture
+- Enhanced source tracking with specific file references and line numbers
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -59,12 +65,12 @@ C --> J["src/random.ts"]
 ```
 
 **Diagram sources**
-- [index.html:1-22](file://index.html#L1-L22)
+- [index.html:1-29](file://index.html#L1-L29)
 - [src/main.ts:1-160](file://src/main.ts#L1-L160)
 - [src/game.ts:1-426](file://src/game.ts#L1-L426)
 - [src/render.ts:1-721](file://src/render.ts#L1-L721)
 - [src/audio.ts:1-296](file://src/audio.ts#L1-L296)
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 - [src/records.ts:1-52](file://src/records.ts#L1-L52)
 - [src/types.ts:1-54](file://src/types.ts#L1-L54)
 - [src/asset-path.ts:1-5](file://src/asset-path.ts#L1-L5)
@@ -73,7 +79,7 @@ C --> J["src/random.ts"]
 **Section sources**
 - [README.md:1-30](file://README.md#L1-L30)
 - [package.json:1-19](file://package.json#L1-L19)
-- [index.html:1-22](file://index.html#L1-L22)
+- [index.html:1-29](file://index.html#L1-L29)
 - [vite.config.ts:1-6](file://vite.config.ts#L1-L6)
 
 ## Core Components
@@ -92,7 +98,7 @@ C --> J["src/random.ts"]
 - [src/game.ts:1-426](file://src/game.ts#L1-L426)
 - [src/render.ts:1-721](file://src/render.ts#L1-L721)
 - [src/audio.ts:1-296](file://src/audio.ts#L1-L296)
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 - [src/records.ts:1-52](file://src/records.ts#L1-L52)
 - [src/types.ts:1-54](file://src/types.ts#L1-L54)
 
@@ -147,7 +153,7 @@ end
 - [src/game.ts:1-426](file://src/game.ts#L1-L426)
 - [src/render.ts:1-721](file://src/render.ts#L1-L721)
 - [src/audio.ts:1-296](file://src/audio.ts#L1-L296)
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 - [src/records.ts:1-52](file://src/records.ts#L1-L52)
 
 ## Detailed Component Analysis
@@ -157,12 +163,12 @@ Responsibilities:
 - Create initial game state with player at center, first coin, and zeroed timers.
 - Move player by one cell per input, clamp within bounds, handle coin collection, and check collisions.
 - Update fireballs each frame: advance age, filter expired, spawn new ones based on score-driven delays.
-- Collision detection uses a radius around the player’s cell; bending fireballs have reduced collision radius.
+- Collision detection uses a radius around the player's cell; bending fireballs have reduced collision radius.
 - Progressive difficulty:
   - Spawn delay decreases with score thresholds.
   - Travel duration decreases with score up to a minimum.
 - Bending fireballs:
-  - Appear with a chance after cooldown, target the player’s row/column, and turn gradually toward the player.
+  - Appear with a chance after cooldown, target the player's row/column, and turn gradually toward the player.
   - Have longer travel time and slower speed ratio compared to straight fireballs.
 
 Key data structures:
@@ -294,7 +300,7 @@ Usability features:
 - Restart shortcuts during game over.
 
 **Section sources**
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 
 ### Records (records.ts)
 Responsibilities:
@@ -352,7 +358,7 @@ audio --> asset
 - [src/game.ts:1-426](file://src/game.ts#L1-L426)
 - [src/render.ts:1-721](file://src/render.ts#L1-L721)
 - [src/audio.ts:1-296](file://src/audio.ts#L1-L296)
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 - [src/records.ts:1-52](file://src/records.ts#L1-L52)
 - [src/types.ts:1-54](file://src/types.ts#L1-L54)
 - [src/asset-path.ts:1-5](file://src/asset-path.ts#L1-L5)
@@ -363,7 +369,7 @@ audio --> asset
 - [src/game.ts:1-426](file://src/game.ts#L1-L426)
 - [src/render.ts:1-721](file://src/render.ts#L1-L721)
 - [src/audio.ts:1-296](file://src/audio.ts#L1-L296)
-- [src/input.ts:1-255](file://src/input.ts#L1-L255)
+- [src/input.ts:1-322](file://src/input.ts#L1-L322)
 - [src/records.ts:1-52](file://src/records.ts#L1-L52)
 - [src/types.ts:1-54](file://src/types.ts#L1-L54)
 - [src/asset-path.ts:1-5](file://src/asset-path.ts#L1-L5)
