@@ -42,8 +42,7 @@ const SCORE_VALUE_X = 318;
 const WARNING_FRAME_SECONDS = 0.08;
 const WARNING_HEIGHT = 54;
 const FIREBALL_FRAME_SECONDS = 0.08;
-const FIREBALL_SIDE_HEIGHT = 52;
-const FIREBALL_VERTICAL_HEIGHT = 58;
+const FIREBALL_SPRITE_HEIGHT = 52;
 
 interface SpriteFrame {
   image: HTMLImageElement | null;
@@ -118,17 +117,9 @@ const coinSprites = createNumberedSpriteFrames("assets/coin", 6);
 const warningSprites = createNumberedSpriteFrames("assets/warning", 3);
 const gameOverBanner = createSpriteFrame(assetPath("assets/game-over-banner.png"));
 const scoreBanner = createSpriteFrame(assetPath("assets/score-banner.png"));
-const fireballLeftSprites = createNumberedSpriteFrames("assets/fireball-left", 4);
+// Left-entry frames point along the positive X axis; rotate them for every straight-fireball heading.
+const fireballSprites = createNumberedSpriteFrames("assets/fireball-left", 4);
 const bendingFireballSprites = createNumberedSpriteFrames("assets/bending-fireball", 4);
-const fireballRightSprites = createNumberedSpriteFrames("assets/fireball-right", 4);
-const fireballBottomSprites = createNumberedSpriteFrames("assets/fireball-bottom", 4);
-const fireballTopSprites = createNumberedSpriteFrames("assets/fireball-top", 4);
-const fireballSpriteConfigs: Record<Edge, { frames: SpriteFrame[]; height: number }> = {
-  left: { frames: fireballLeftSprites, height: FIREBALL_SIDE_HEIGHT },
-  right: { frames: fireballRightSprites, height: FIREBALL_SIDE_HEIGHT },
-  up: { frames: fireballTopSprites, height: FIREBALL_VERTICAL_HEIGHT },
-  down: { frames: fireballBottomSprites, height: FIREBALL_VERTICAL_HEIGHT },
-};
 
 if (typeof Image !== "undefined") {
   iceMapImage = new Image();
@@ -386,7 +377,7 @@ function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], ela
     } else {
       const scale = 1;
       const rotation = getFireballRotation(fireball);
-      if (!drawFireballSprite(ctx, fireball.edge, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
+      if (!drawFireballSprite(ctx, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
         drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
       }
     }
@@ -395,21 +386,19 @@ function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], ela
 
 function drawFireballSprite(
   ctx: CanvasRenderingContext2D,
-  edge: Edge,
   centerX: number,
   centerY: number,
   elapsed: number,
   scale: number,
   rotation: number,
 ): boolean {
-  const { frames, height } = fireballSpriteConfigs[edge];
-  const frame = frames[Math.floor(elapsed / FIREBALL_FRAME_SECONDS) % frames.length];
+  const frame = fireballSprites[Math.floor(elapsed / FIREBALL_FRAME_SECONDS) % fireballSprites.length];
 
   if (!frame.ready || !frame.image || frame.image.naturalWidth === 0) {
     return false;
   }
 
-  const scaledHeight = Math.round(height * scale);
+  const scaledHeight = Math.round(FIREBALL_SPRITE_HEIGHT * scale);
   const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * scaledHeight);
   ctx.save();
   ctx.translate(Math.round(centerX), Math.round(centerY));
@@ -440,8 +429,7 @@ function drawBendingFireballSprite(
     return false;
   }
 
-  const height = FIREBALL_SIDE_HEIGHT;
-  const scaledHeight = Math.round(height * scale);
+  const scaledHeight = Math.round(FIREBALL_SPRITE_HEIGHT * scale);
   const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * scaledHeight);
   ctx.save();
   ctx.translate(Math.round(centerX), Math.round(centerY));

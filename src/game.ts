@@ -176,8 +176,8 @@ export function getFireballPosition(fireball: Fireball): FireballPosition {
 }
 
 export function getFireballRotation(fireball: Fireball): number {
-  if (fireball.kind !== "bending") {
-    return 0;
+  if (fireball.kind === "normal") {
+    return getStraightFireballAngle(fireball.edge);
   }
 
   const movementAngle = Math.atan2(fireball.velocityRow, fireball.velocityCol);

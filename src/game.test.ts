@@ -185,6 +185,13 @@ describe("fireballs", () => {
     expect(fireball.kind).toBe("normal");
   });
 
+  it("rotates straight fireballs from the left-entry sprite orientation", () => {
+    expect(getFireballRotation(fireballFixture({ edge: "left" }))).toBe(0);
+    expect(getFireballRotation(fireballFixture({ edge: "right" }))).toBe(Math.PI);
+    expect(getFireballRotation(fireballFixture({ edge: "up" }))).toBe(Math.PI / 2);
+    expect(getFireballRotation(fireballFixture({ edge: "down" }))).toBe(-Math.PI / 2);
+  });
+
   it("can spawn a rare bending fireball that curves toward the player lane without exceeding 45 degrees", () => {
     const fireball = createSpawnedFireball(1, 7, { row: 4, col: 2 }, true, sequenceRandom([0.99, 0, 0.01]));
 
