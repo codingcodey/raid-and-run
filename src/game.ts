@@ -4,7 +4,11 @@ import { randomInt, type RandomSource } from "./random";
 export const FIREBALL_WARNING_DURATION = 0.72;
 export const FIREBALL_OFFSCREEN_CELLS = 2.5;
 export const FIREBALL_COLLISION_RADIUS = 0.42;
-export const BENDING_FIREBALL_CHANCE = 0.05;
+export const BENDING_FIREBALL_CHANCE = 0.025;
+export const FAST_FIREBALL_CHANCE = 0.025;
+export const FAST_FIREBALL_COUNT = 3;
+export const FAST_FIREBALL_SPEED_RATIO = 3;
+export const FAST_FIREBALL_WARNING_DURATION = 3;
 export const BENDING_FIREBALL_SCALE = 0.75;
 export const BENDING_FIREBALL_SPEED_RATIO = 0.35;
 export const BENDING_FIREBALL_MAX_TRAVEL_SECONDS = 10;
@@ -44,6 +48,7 @@ export function createInitialGameState(records: RecordsSnapshot, random: RandomS
     nextFireballDelay: scheduleFireballDelay(INITIAL_SCORE),
     nextFireballId: 1,
     bendingFireballCooldown: 0,
+    fastFireballSequenceActive: false,
   };
 }
 
@@ -93,7 +98,16 @@ export function updateGame(state: GameState, deltaSeconds: number, random: Rando
       .filter((fireball) => fireball.age <= fireball.warningDuration + fireball.travelDuration),
   };
 
-  if (nextState.score > 0) {
+  if (state.fastFireballSequenceActive && !nextState.fireballs.some((fireball) => fireball.kind === "fast")) {
+    nextState = {
+      ...nextState,
+      fastFireballSequenceActive: false,
+      fireballSpawnClock: 0,
+      nextFireballDelay: scheduleFireballDelay(nextState.score),
+    };
+  }
+
+  if (nextState.score > 0 && !nextState.fastFireballSequenceActive) {
     nextState = advanceFireballSpawner(nextState, deltaSeconds, random);
   }
 
@@ -139,11 +153,12 @@ export function createSpawnedFireball(
   player: Cell,
   canBend: boolean,
   random: RandomSource = Math.random,
+  isBendingOverride?: boolean,
 ): Fireball {
   const edge = EDGE_ORDER[randomInt(EDGE_ORDER.length, random)];
   const lane = randomInt(GRID_SIZE, random);
   const targetLane = getTargetLane(edge, player);
-  const isBending = canBend && random() < BENDING_FIREBALL_CHANCE;
+  const isBending = canBend && (isBendingOverride ?? random() < BENDING_FIREBALL_CHANCE);
   const normalTravelDuration = scheduleFireballTravelDuration(score);
   const travelDuration = scheduleBendingFireballTravelDuration(score, isBending);
   const start = getFireballStart(edge, lane);
@@ -165,6 +180,33 @@ export function createSpawnedFireball(
   };
 }
 
+export function createFastFireballs(score: number, startingId: number, random: RandomSource = Math.random): Fireball[] {
+  const availableEdges = [...EDGE_ORDER];
+
+  return Array.from({ length: FAST_FIREBALL_COUNT }, (_, index) => {
+    const edge = availableEdges.splice(randomInt(availableEdges.length, random), 1)[0];
+    const lane = randomInt(GRID_SIZE, random);
+    const travelDuration = scheduleFireballTravelDuration(score) / FAST_FIREBALL_SPEED_RATIO;
+    const start = getFireballStart(edge, lane);
+    const velocity = getStraightFireballVelocity(edge, travelDuration);
+
+    return {
+      id: startingId + index,
+      edge,
+      lane,
+      kind: "fast",
+      targetLane: lane,
+      row: start.row,
+      col: start.col,
+      velocityRow: velocity.row,
+      velocityCol: velocity.col,
+      age: 0,
+      warningDuration: FAST_FIREBALL_WARNING_DURATION,
+      travelDuration,
+    };
+  });
+}
+
 export function getFireballPosition(fireball: Fireball): FireballPosition {
   const progress = getFireballTravelProgress(fireball);
   const position =
@@ -176,7 +218,7 @@ export function getFireballPosition(fireball: Fireball): FireballPosition {
 }
 
 export function getFireballRotation(fireball: Fireball): number {
-  if (fireball.kind === "normal") {
+  if (fireball.kind !== "bending") {
     return getStraightFireballAngle(fireball.edge);
   }
 
@@ -255,7 +297,26 @@ function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: 
 
   while (fireballSpawnClock >= nextFireballDelay) {
     fireballSpawnClock -= nextFireballDelay;
-    const fireball = createSpawnedFireball(state.score, nextFireballId, state.player, bendingFireballCooldown === 0, random);
+
+    const canBend = bendingFireballCooldown === 0;
+    const specialFireballRoll = canBend ? random() : 1;
+
+    if (specialFireballRoll < FAST_FIREBALL_CHANCE) {
+      const fastFireballs = createFastFireballs(state.score, nextFireballId, random);
+
+      return {
+        ...state,
+        fireballs: [...fireballs, ...fastFireballs],
+        fireballSpawnClock: 0,
+        nextFireballDelay: scheduleFireballDelay(state.score),
+        nextFireballId: nextFireballId + fastFireballs.length,
+        bendingFireballCooldown,
+        fastFireballSequenceActive: true,
+      };
+    }
+
+    const isBending = canBend && specialFireballRoll < FAST_FIREBALL_CHANCE + BENDING_FIREBALL_CHANCE;
+    const fireball = createSpawnedFireball(state.score, nextFireballId, state.player, canBend, random, isBending);
     fireballs = [...fireballs, fireball];
     nextFireballId += 1;
 

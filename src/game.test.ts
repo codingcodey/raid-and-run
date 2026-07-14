@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BENDING_FIREBALL_CHANCE,
   BENDING_FIREBALL_COOLDOWN_SPAWNS,
   BENDING_FIREBALL_FORCED_DELAY,
   BENDING_FIREBALL_MAX_ANGLE_RADIANS,
@@ -8,9 +9,14 @@ import {
   BENDING_FIREBALL_SCALE,
   BENDING_FIREBALL_SPEED_RATIO,
   BENDING_FIREBALL_TURN_RESPONSE,
+  createFastFireballs,
   createFireball,
   createInitialGameState,
   createSpawnedFireball,
+  FAST_FIREBALL_CHANCE,
+  FAST_FIREBALL_COUNT,
+  FAST_FIREBALL_SPEED_RATIO,
+  FAST_FIREBALL_WARNING_DURATION,
   FIREBALL_WARNING_DURATION,
   FIREBALL_COLLISION_RADIUS,
   fireballHitsCell,
@@ -142,12 +148,13 @@ describe("fireballs", () => {
     };
 
     const afterCoin = movePlayer(state, "right", fixedRandom(0));
-    const beforeDelay = updateGame(afterCoin, 1.49, fixedRandom(0));
-    const afterDelay = updateGame(afterCoin, 1.5, fixedRandom(0));
+    const beforeDelay = updateGame(afterCoin, 1.49, fixedRandom(0.5));
+    const afterDelay = updateGame(afterCoin, 1.5, fixedRandom(0.5));
 
     expect(beforeDelay.fireballs).toHaveLength(0);
     expect(afterDelay.score).toBe(1);
     expect(afterDelay.fireballs).toHaveLength(1);
+    expect(afterDelay.fireballs[0].kind).toBe("normal");
     expect(afterDelay.fireballs[0].age).toBe(0);
   });
 
@@ -158,8 +165,8 @@ describe("fireballs", () => {
       nextFireballDelay: scheduleFireballDelay(25),
     };
 
-    const beforeDelay = updateGame(state, 0.79, fixedRandom(0));
-    const afterDelay = updateGame(state, 0.8, fixedRandom(0));
+    const beforeDelay = updateGame(state, 0.79, fixedRandom(0.5));
+    const afterDelay = updateGame(state, 0.8, fixedRandom(0.5));
 
     expect(scheduleFireballDelay(1)).toBe(1.5);
     expect(scheduleFireballDelay(9)).toBe(1.5);
@@ -183,6 +190,52 @@ describe("fireballs", () => {
     expect(fireball.lane).toBe(4);
     expect(fireball.id).toBe(7);
     expect(fireball.kind).toBe("normal");
+  });
+
+  it("creates three unique-edge fast fireballs with a three-second warning and triple speed", () => {
+    const fastFireballs = createFastFireballs(1, 10, fixedRandom(0));
+    const normalSpeed = 9 / scheduleFireballTravelDuration(1);
+
+    expect(BENDING_FIREBALL_CHANCE).toBe(0.025);
+    expect(FAST_FIREBALL_CHANCE).toBe(0.025);
+    expect(FAST_FIREBALL_COUNT).toBe(3);
+    expect(FAST_FIREBALL_SPEED_RATIO).toBe(3);
+    expect(FAST_FIREBALL_WARNING_DURATION).toBe(3);
+    expect(fastFireballs.map((fireball) => fireball.id)).toEqual([10, 11, 12]);
+    expect(new Set(fastFireballs.map((fireball) => fireball.edge)).size).toBe(3);
+
+    for (const fireball of fastFireballs) {
+      expect(fireball.kind).toBe("fast");
+      expect(fireball.warningDuration).toBe(FAST_FIREBALL_WARNING_DURATION);
+      expect(fireball.travelDuration).toBeCloseTo(scheduleFireballTravelDuration(1) / FAST_FIREBALL_SPEED_RATIO);
+      expect(Math.hypot(fireball.velocityRow, fireball.velocityCol)).toBeCloseTo(normalSpeed * FAST_FIREBALL_SPEED_RATIO);
+    }
+  });
+
+  it("pauses normal spawns for a fast-fireball warning sequence and resumes after its projectiles leave", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+      player: { row: 2, col: 2 },
+    };
+
+    const warningState = updateGame(state, 1.5, fixedRandom(0));
+    const duringWarning = updateGame(warningState, 2.99, fixedRandom(0.5));
+    const launchedState = updateGame(warningState, FAST_FIREBALL_WARNING_DURATION, fixedRandom(0.5));
+    const eventComplete = updateGame(launchedState, scheduleFireballTravelDuration(1) / FAST_FIREBALL_SPEED_RATIO + 0.1, fixedRandom(0.5));
+    const resumedState = updateGame(eventComplete, 0.2, fixedRandom(0.5));
+
+    expect(warningState.fastFireballSequenceActive).toBe(true);
+    expect(warningState.fireballs).toHaveLength(FAST_FIREBALL_COUNT);
+    expect(warningState.fireballs.every((fireball) => fireball.kind === "fast" && fireball.age === 0)).toBe(true);
+    expect(duringWarning.fireballs).toHaveLength(FAST_FIREBALL_COUNT);
+    expect(duringWarning.fireballs.every((fireball) => fireball.age < FAST_FIREBALL_WARNING_DURATION)).toBe(true);
+    expect(launchedState.fireballs.every((fireball) => fireball.age === FAST_FIREBALL_WARNING_DURATION)).toBe(true);
+    expect(eventComplete.fastFireballSequenceActive).toBe(false);
+    expect(eventComplete.fireballs).toHaveLength(0);
+    expect(resumedState.fireballs).toHaveLength(1);
+    expect(resumedState.fireballs[0].kind).toBe("normal");
   });
 
   it("rotates straight fireballs from the left-entry sprite orientation", () => {
@@ -277,7 +330,14 @@ describe("fireballs", () => {
       nextFireballDelay: scheduleFireballDelay(1),
     };
 
-    const afterBending = updateGame(state, 1.5, sequenceRandom([0.99, 0, 0.01]));
+    const bendingFireball = createSpawnedFireball(1, 1, state.player, true, sequenceRandom([0.99, 0, 0.01]));
+    const afterBending: GameState = {
+      ...state,
+      fireballs: [bendingFireball],
+      nextFireballId: 2,
+      nextFireballDelay: BENDING_FIREBALL_FORCED_DELAY,
+      bendingFireballCooldown: BENDING_FIREBALL_COOLDOWN_SPAWNS,
+    };
     const afterForcedNormals = updateGame(afterBending, 7.5, fixedRandom(0));
 
     expect(afterBending.fireballs[0].kind).toBe("bending");

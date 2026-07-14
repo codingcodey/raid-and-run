@@ -42,6 +42,7 @@ const SCORE_VALUE_X = 318;
 const WARNING_FRAME_SECONDS = 0.08;
 const WARNING_HEIGHT = 54;
 const FIREBALL_FRAME_SECONDS = 0.08;
+const FAST_FIREBALL_FRAME_SECONDS = 0.1;
 const FIREBALL_SPRITE_HEIGHT = 52;
 
 interface SpriteFrame {
@@ -119,6 +120,7 @@ const gameOverBanner = createSpriteFrame(assetPath("assets/game-over-banner.png"
 const scoreBanner = createSpriteFrame(assetPath("assets/score-banner.png"));
 // Left-entry frames point along the positive X axis; rotate them for every straight-fireball heading.
 const fireballSprites = createNumberedSpriteFrames("assets/fireball-left", 4);
+const fastFireballSprites = createNumberedSpriteFrames("assets/fast-fireball", 2);
 const bendingFireballSprites = createNumberedSpriteFrames("assets/bending-fireball", 4);
 
 if (typeof Image !== "undefined") {
@@ -306,7 +308,7 @@ function drawTile(
 
 function drawWarnings(ctx: CanvasRenderingContext2D, fireballs: Fireball[], elapsed: number): void {
   for (const fireball of fireballs) {
-    if (fireball.age <= fireball.warningDuration) {
+    if (fireball.age < fireball.warningDuration) {
       drawWarning(ctx, fireball.edge, fireball.lane, elapsed + fireball.id * 0.017);
     }
   }
@@ -374,6 +376,11 @@ function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], ela
       if (!drawBendingFireballSprite(ctx, x, y, elapsed + fireball.id * 0.013, scale, rotation)) {
         drawFireball(ctx, x, y, elapsed + fireball.id, scale, rotation);
       }
+    } else if (fireball.kind === "fast") {
+      const rotation = getFireballRotation(fireball);
+      if (!drawFastFireballSprite(ctx, x, y, elapsed + fireball.id * 0.013, rotation)) {
+        drawFireball(ctx, x, y, elapsed + fireball.id, 1, rotation);
+      }
     } else {
       const scale = 1;
       const rotation = getFireballRotation(fireball);
@@ -410,6 +417,30 @@ function drawFireballSprite(
     width,
     scaledHeight,
   );
+  ctx.restore();
+
+  return true;
+}
+
+function drawFastFireballSprite(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  elapsed: number,
+  rotation: number,
+): boolean {
+  const frame = fastFireballSprites[Math.floor(elapsed / FAST_FIREBALL_FRAME_SECONDS) % fastFireballSprites.length];
+
+  if (!frame.ready || !frame.image || frame.image.naturalWidth === 0) {
+    return false;
+  }
+
+  const height = FIREBALL_SPRITE_HEIGHT;
+  const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * height);
+  ctx.save();
+  ctx.translate(Math.round(centerX), Math.round(centerY));
+  ctx.rotate(rotation);
+  ctx.drawImage(frame.image, Math.round(-width / 2), Math.round(-height / 2), width, height);
   ctx.restore();
 
   return true;
