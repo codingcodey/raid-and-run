@@ -39,7 +39,7 @@ export function createInitialGameState(records: RecordsSnapshot, random: RandomS
   return {
     player,
     playerFacing: "down",
-    coin: spawnCoin(player, null, random),
+    coin: spawnCoin(player, null, null, random),
     previousCoin: null,
     fireballs: [],
     score: INITIAL_SCORE,
@@ -80,7 +80,7 @@ export function movePlayer(state: GameState, direction: Direction, random: Rando
       ...nextState,
       score,
       previousCoin,
-      coin: spawnCoin(player, previousCoin, random),
+      coin: spawnCoin(player, previousCoin, nextState.spikeTrap, random),
       fireballSpawnClock: state.score === 0 ? 0 : nextState.fireballSpawnClock,
       nextFireballDelay: state.score === 0 ? scheduleFireballDelay(score) : nextState.nextFireballDelay,
     };
@@ -119,11 +119,10 @@ export function updateGame(state: GameState, deltaSeconds: number, random: Rando
   return isPlayerHit(nextState) ? markGameOver(nextState) : nextState;
 }
 
-export function spawnCoin(player: Cell, previousCoin: Cell | null, random: RandomSource = Math.random): Cell {
-  const preferredCells = ALL_CELLS.filter((cell) => {
-    return !cellsEqual(cell, player) && (!previousCoin || !cellsEqual(cell, previousCoin));
-  });
-  const fallbackCells = ALL_CELLS.filter((cell) => !cellsEqual(cell, player));
+export function spawnCoin(player: Cell, previousCoin: Cell | null, spikeTrap: SpikeTrap | null, random: RandomSource = Math.random): Cell {
+  const isBlocked = (cell: Cell) => cellsEqual(cell, player) || (spikeTrap !== null && cellsEqual(cell, spikeTrap.cell));
+  const preferredCells = ALL_CELLS.filter((cell) => !isBlocked(cell) && (!previousCoin || !cellsEqual(cell, previousCoin)));
+  const fallbackCells = ALL_CELLS.filter((cell) => !isBlocked(cell));
   const candidates = preferredCells.length > 0 ? preferredCells : fallbackCells;
 
   return candidates[randomInt(candidates.length, random)];
@@ -212,8 +211,9 @@ export function createFastFireballs(score: number, startingId: number, random: R
   });
 }
 
-export function createSpikeTrap(random: RandomSource = Math.random): SpikeTrap {
-  const cell = ALL_CELLS[randomInt(ALL_CELLS.length, random)];
+export function createSpikeTrap(random: RandomSource = Math.random, coin: Cell | null = null): SpikeTrap {
+  const candidates = coin ? ALL_CELLS.filter((cell) => !cellsEqual(cell, coin)) : ALL_CELLS;
+  const cell = candidates[randomInt(candidates.length, random)];
 
   return {
     cell: { ...cell },
@@ -347,7 +347,7 @@ function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: 
         nextFireballDelay: scheduleFireballDelay(state.score),
         nextFireballId,
         bendingFireballCooldown,
-        spikeTrap: createSpikeTrap(random),
+        spikeTrap: createSpikeTrap(random, state.coin),
       };
     }
 

@@ -30,6 +30,7 @@ import {
   movePlayer,
   scheduleFireballDelay,
   scheduleFireballTravelDuration,
+  spawnCoin,
   updateGame,
 } from "./game";
 import { MemoryRecordsStore } from "./records";
@@ -256,6 +257,28 @@ describe("fireballs", () => {
     expect(spikeState.fireballs).toHaveLength(0);
     expect(spikeState.spikeTrap?.cell).toEqual({ row: 4, col: 4 });
     expect(spikeState.spikeTrap?.age).toBe(0);
+  });
+
+  it("does not spawn a spike trap on the coin's cell", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+      coin: { row: 4, col: 4 },
+    };
+    const spikeState = updateGame(state, 1.5, sequenceRandom([0.05, 0.99]));
+
+    expect(spikeState.spikeTrap?.cell).not.toEqual({ row: 4, col: 4 });
+    expect(spikeState.spikeTrap?.cell).toEqual({ row: 4, col: 3 });
+  });
+
+  it("does not spawn a coin on the spike trap's cell", () => {
+    const trap = createSpikeTrap(fixedRandom(0));
+    const coin = spawnCoin({ row: 2, col: 2 }, null, trap, fixedRandom(0));
+
+    expect(trap.cell).toEqual({ row: 0, col: 0 });
+    expect(coin).not.toEqual(trap.cell);
+    expect(coin).toEqual({ row: 0, col: 1 });
   });
 
   it("suppresses fast and bending fireball spawns while a spike trap is present", () => {
