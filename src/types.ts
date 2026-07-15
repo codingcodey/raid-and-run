@@ -10,6 +10,13 @@ export interface Cell {
   col: number;
 }
 
+export interface SpikeTrap {
+  cell: Cell;
+  age: number;
+  warningDuration: number;
+  activeDuration: number;
+}
+
 export interface Fireball {
   id: number;
   edge: Edge;
@@ -41,6 +48,7 @@ export interface GameState {
   nextFireballId: number;
   bendingFireballCooldown: number;
   fastFireballSequenceActive: boolean;
+  spikeTrap: SpikeTrap | null;
 }
 
 export interface RecordsSnapshot {

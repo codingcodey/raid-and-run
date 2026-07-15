@@ -1,11 +1,14 @@
-import { CENTER_CELL, GRID_SIZE, type Cell, type Direction, type Edge, type Fireball, type GameState, type RecordsSnapshot } from "./types";
+import { CENTER_CELL, GRID_SIZE, type Cell, type Direction, type Edge, type Fireball, type GameState, type RecordsSnapshot, type SpikeTrap } from "./types";
 import { randomInt, type RandomSource } from "./random";
 
 export const FIREBALL_WARNING_DURATION = 0.72;
 export const FIREBALL_OFFSCREEN_CELLS = 2.5;
 export const FIREBALL_COLLISION_RADIUS = 0.42;
-export const BENDING_FIREBALL_CHANCE = 0.025;
-export const FAST_FIREBALL_CHANCE = 0.025;
+export const BENDING_FIREBALL_CHANCE = 0.02;
+export const FAST_FIREBALL_CHANCE = 0.02;
+export const SPIKE_TRAP_CHANCE = 0.02;
+export const SPIKE_TRAP_WARNING_DURATION = 2;
+export const SPIKE_TRAP_ACTIVE_DURATION = 4;
 export const FAST_FIREBALL_COUNT = 3;
 export const FAST_FIREBALL_SPEED_RATIO = 3;
 export const FAST_FIREBALL_WARNING_DURATION = 3;
@@ -49,6 +52,7 @@ export function createInitialGameState(records: RecordsSnapshot, random: RandomS
     nextFireballId: 1,
     bendingFireballCooldown: 0,
     fastFireballSequenceActive: false,
+    spikeTrap: null,
   };
 }
 
@@ -96,6 +100,7 @@ export function updateGame(state: GameState, deltaSeconds: number, random: Rando
     fireballs: state.fireballs
       .map((fireball) => updateFireball(fireball, state.player, deltaSeconds))
       .filter((fireball) => fireball.age <= fireball.warningDuration + fireball.travelDuration),
+    spikeTrap: updateSpikeTrap(state.spikeTrap, deltaSeconds),
   };
 
   if (state.fastFireballSequenceActive && !nextState.fireballs.some((fireball) => fireball.kind === "fast")) {
@@ -207,6 +212,21 @@ export function createFastFireballs(score: number, startingId: number, random: R
   });
 }
 
+export function createSpikeTrap(random: RandomSource = Math.random): SpikeTrap {
+  const cell = ALL_CELLS[randomInt(ALL_CELLS.length, random)];
+
+  return {
+    cell: { ...cell },
+    age: 0,
+    warningDuration: SPIKE_TRAP_WARNING_DURATION,
+    activeDuration: SPIKE_TRAP_ACTIVE_DURATION,
+  };
+}
+
+export function isSpikeTrapActive(spikeTrap: SpikeTrap): boolean {
+  return spikeTrap.age >= spikeTrap.warningDuration && spikeTrap.age < spikeTrap.warningDuration + spikeTrap.activeDuration;
+}
+
 export function getFireballPosition(fireball: Fireball): FireballPosition {
   const progress = getFireballTravelProgress(fireball);
   const position =
@@ -261,7 +281,8 @@ export function fireballHitsCell(fireball: Fireball, cell: Cell): boolean {
 }
 
 export function isPlayerHit(state: GameState): boolean {
-  return state.fireballs.some((fireball) => fireballHitsCell(fireball, state.player));
+  return state.fireballs.some((fireball) => fireballHitsCell(fireball, state.player))
+    || (state.spikeTrap !== null && isSpikeTrapActive(state.spikeTrap) && cellsEqual(state.player, state.spikeTrap.cell));
 }
 
 export function scheduleFireballDelay(score: number): number {
@@ -298,8 +319,8 @@ function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: 
   while (fireballSpawnClock >= nextFireballDelay) {
     fireballSpawnClock -= nextFireballDelay;
 
-    const canBend = bendingFireballCooldown === 0;
-    const specialFireballRoll = canBend ? random() : 1;
+    const canSpawnSpecial = bendingFireballCooldown === 0 && state.spikeTrap === null;
+    const specialFireballRoll = canSpawnSpecial ? random() : 1;
 
     if (specialFireballRoll < FAST_FIREBALL_CHANCE) {
       const fastFireballs = createFastFireballs(state.score, nextFireballId, random);
@@ -315,8 +336,23 @@ function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: 
       };
     }
 
-    const isBending = canBend && specialFireballRoll < FAST_FIREBALL_CHANCE + BENDING_FIREBALL_CHANCE;
-    const fireball = createSpawnedFireball(state.score, nextFireballId, state.player, canBend, random, isBending);
+    const spikeTrapStartsAt = FAST_FIREBALL_CHANCE + BENDING_FIREBALL_CHANCE;
+    const spikeTrapThreshold = spikeTrapStartsAt + SPIKE_TRAP_CHANCE;
+
+    if (specialFireballRoll >= spikeTrapStartsAt && specialFireballRoll < spikeTrapThreshold) {
+      return {
+        ...state,
+        fireballs,
+        fireballSpawnClock: 0,
+        nextFireballDelay: scheduleFireballDelay(state.score),
+        nextFireballId,
+        bendingFireballCooldown,
+        spikeTrap: createSpikeTrap(random),
+      };
+    }
+
+    const isBending = canSpawnSpecial && specialFireballRoll < FAST_FIREBALL_CHANCE + BENDING_FIREBALL_CHANCE;
+    const fireball = createSpawnedFireball(state.score, nextFireballId, state.player, canSpawnSpecial, random, isBending);
     fireballs = [...fireballs, fireball];
     nextFireballId += 1;
 
@@ -381,6 +417,18 @@ function getFireballTravelProgress(fireball: Fireball): number {
   }
 
   return Math.max(0, Math.min(1, (fireball.age - fireball.warningDuration) / fireball.travelDuration));
+}
+
+function updateSpikeTrap(spikeTrap: SpikeTrap | null, deltaSeconds: number): SpikeTrap | null {
+  if (!spikeTrap) {
+    return null;
+  }
+
+  const age = spikeTrap.age + deltaSeconds;
+
+  return age < spikeTrap.warningDuration + spikeTrap.activeDuration
+    ? { ...spikeTrap, age }
+    : null;
 }
 
 function updateFireball(fireball: Fireball, player: Cell, deltaSeconds: number): Fireball {

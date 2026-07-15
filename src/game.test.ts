@@ -11,17 +11,22 @@ import {
   BENDING_FIREBALL_TURN_RESPONSE,
   createFastFireballs,
   createFireball,
+  createSpikeTrap,
   createInitialGameState,
   createSpawnedFireball,
   FAST_FIREBALL_CHANCE,
   FAST_FIREBALL_COUNT,
   FAST_FIREBALL_SPEED_RATIO,
   FAST_FIREBALL_WARNING_DURATION,
+  SPIKE_TRAP_ACTIVE_DURATION,
+  SPIKE_TRAP_CHANCE,
+  SPIKE_TRAP_WARNING_DURATION,
   FIREBALL_WARNING_DURATION,
   FIREBALL_COLLISION_RADIUS,
   fireballHitsCell,
   getFireballPosition,
   getFireballRotation,
+  isSpikeTrapActive,
   movePlayer,
   scheduleFireballDelay,
   scheduleFireballTravelDuration,
@@ -196,8 +201,8 @@ describe("fireballs", () => {
     const fastFireballs = createFastFireballs(1, 10, fixedRandom(0));
     const normalSpeed = 9 / scheduleFireballTravelDuration(1);
 
-    expect(BENDING_FIREBALL_CHANCE).toBe(0.025);
-    expect(FAST_FIREBALL_CHANCE).toBe(0.025);
+    expect(BENDING_FIREBALL_CHANCE).toBe(0.02);
+    expect(FAST_FIREBALL_CHANCE).toBe(0.02);
     expect(FAST_FIREBALL_COUNT).toBe(3);
     expect(FAST_FIREBALL_SPEED_RATIO).toBe(3);
     expect(FAST_FIREBALL_WARNING_DURATION).toBe(3);
@@ -210,6 +215,64 @@ describe("fireballs", () => {
       expect(fireball.travelDuration).toBeCloseTo(scheduleFireballTravelDuration(1) / FAST_FIREBALL_SPEED_RATIO);
       expect(Math.hypot(fireball.velocityRow, fireball.velocityCol)).toBeCloseTo(normalSpeed * FAST_FIREBALL_SPEED_RATIO);
     }
+  });
+
+  it("warns, triggers, and expires a spike trap while only its triggered phase is lethal", () => {
+    const trap = createSpikeTrap(fixedRandom(0));
+    const warningState: GameState = {
+      ...baseState(),
+      player: { row: 0, col: 0 },
+      spikeTrap: trap,
+    };
+    const duringWarning = updateGame(warningState, SPIKE_TRAP_WARNING_DURATION - 0.01, fixedRandom(0.5));
+    const activeState: GameState = {
+      ...warningState,
+      spikeTrap: { ...trap, age: SPIKE_TRAP_WARNING_DURATION },
+    };
+    const expiredState: GameState = {
+      ...baseState(),
+      player: { row: 4, col: 4 },
+      spikeTrap: { ...trap, age: SPIKE_TRAP_WARNING_DURATION + SPIKE_TRAP_ACTIVE_DURATION - 0.01 },
+    };
+
+    expect(trap.cell).toEqual({ row: 0, col: 0 });
+    expect(SPIKE_TRAP_CHANCE).toBe(0.02);
+    expect(SPIKE_TRAP_WARNING_DURATION).toBe(2);
+    expect(SPIKE_TRAP_ACTIVE_DURATION).toBe(4);
+    expect(isSpikeTrapActive(duringWarning.spikeTrap!)).toBe(false);
+    expect(duringWarning.gameStatus).toBe("playing");
+    expect(updateGame(activeState, 0, fixedRandom(0.5)).gameStatus).toBe("gameOver");
+    expect(updateGame(expiredState, 0.02, fixedRandom(0.5)).spikeTrap).toBeNull();
+  });
+
+  it("activates a spike trap from its dedicated special-spawn range", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+    };
+    const spikeState = updateGame(state, 1.5, sequenceRandom([0.05, 0.99]));
+
+    expect(spikeState.fireballs).toHaveLength(0);
+    expect(spikeState.spikeTrap?.cell).toEqual({ row: 4, col: 4 });
+    expect(spikeState.spikeTrap?.age).toBe(0);
+  });
+
+  it("suppresses fast and bending fireball spawns while a spike trap is present", () => {
+    const trap = createSpikeTrap(fixedRandom(0));
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+      spikeTrap: trap,
+    };
+
+    const nextState = updateGame(state, 1.5, fixedRandom(0));
+
+    expect(nextState.fastFireballSequenceActive).toBe(false);
+    expect(nextState.fireballs).toHaveLength(1);
+    expect(nextState.fireballs[0].kind).toBe("normal");
+    expect(nextState.spikeTrap?.cell).toEqual(trap.cell);
   });
 
   it("pauses normal spawns for a fast-fireball warning sequence and resumes after its projectiles leave", () => {

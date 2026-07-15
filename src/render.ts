@@ -1,6 +1,6 @@
 import { assetPath } from "./asset-path";
-import { GRID_SIZE, type Cell, type Edge, type Fireball, type GameState } from "./types";
-import { BENDING_FIREBALL_SCALE, getFireballPosition, getFireballRotation } from "./game";
+import { GRID_SIZE, type Cell, type Edge, type Fireball, type GameState, type SpikeTrap } from "./types";
+import { BENDING_FIREBALL_SCALE, getFireballPosition, getFireballRotation, isSpikeTrapActive } from "./game";
 
 export const CANVAS_WIDTH = 420;
 export const CANVAS_HEIGHT = 620;
@@ -44,6 +44,7 @@ const WARNING_HEIGHT = 54;
 const FIREBALL_FRAME_SECONDS = 0.08;
 const FAST_FIREBALL_FRAME_SECONDS = 0.1;
 const FIREBALL_SPRITE_HEIGHT = 52;
+const SPIKE_TRAP_SIZE = CELL_SIZE;
 
 interface SpriteFrame {
   image: HTMLImageElement | null;
@@ -118,6 +119,8 @@ const coinSprites = createNumberedSpriteFrames("assets/coin", 6);
 const warningSprites = createNumberedSpriteFrames("assets/warning", 3);
 const gameOverBanner = createSpriteFrame(assetPath("assets/game-over-banner.png"));
 const scoreBanner = createSpriteFrame(assetPath("assets/score-banner.png"));
+const spikeTrapWarning = createSpriteFrame(assetPath("assets/spike-trap.webp"));
+const spikeTrapTriggered = createSpriteFrame(assetPath("assets/spike-trigger-trap.webp"));
 // Left-entry frames point along the positive X axis; rotate them for every straight-fireball heading.
 const fireballSprites = createNumberedSpriteFrames("assets/fireball-left", 4);
 const fastFireballSprites = createNumberedSpriteFrames("assets/fast-fireball", 2);
@@ -163,6 +166,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): voi
   drawBackground(ctx, state.elapsed);
   drawBoard(ctx, state.elapsed);
   drawWarnings(ctx, state.fireballs, state.elapsed);
+  drawSpikeTrap(ctx, state.spikeTrap);
   drawCoinInCell(ctx, state.coin, state.elapsed);
   drawFireballs(ctx, state.fireballs, state.elapsed);
   drawPlayer(ctx, state, state.gameStatus === "gameOver");
@@ -347,6 +351,28 @@ function drawWarning(ctx: CanvasRenderingContext2D, edge: Edge, lane: number, ph
 
   const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * WARNING_HEIGHT);
   ctx.drawImage(frame.image, Math.round(x - width / 2), Math.round(y - WARNING_HEIGHT / 2), width, WARNING_HEIGHT);
+}
+
+function drawSpikeTrap(ctx: CanvasRenderingContext2D, spikeTrap: SpikeTrap | null): void {
+  if (!spikeTrap) {
+    return;
+  }
+
+  const center = cellCenter(spikeTrap.cell);
+  const active = isSpikeTrapActive(spikeTrap);
+  const frame = active ? spikeTrapTriggered : spikeTrapWarning;
+  const x = Math.round(center.x - SPIKE_TRAP_SIZE / 2);
+  const y = Math.round(center.y - SPIKE_TRAP_SIZE / 2);
+
+  if (frame.ready && frame.image && frame.image.naturalWidth > 0) {
+    ctx.drawImage(frame.image, x, y, SPIKE_TRAP_SIZE, SPIKE_TRAP_SIZE);
+    return;
+  }
+
+  ctx.fillStyle = active ? "#cf2e22" : "#4e4f4e";
+  ctx.fillRect(x + 5, y + 5, SPIKE_TRAP_SIZE - 10, SPIKE_TRAP_SIZE - 10);
+  ctx.fillStyle = active ? "#ffdb57" : "#dedede";
+  ctx.fillRect(x + 14, y + 14, SPIKE_TRAP_SIZE - 28, SPIKE_TRAP_SIZE - 28);
 }
 
 function drawCoinInCell(ctx: CanvasRenderingContext2D, cell: Cell, elapsed: number): void {
