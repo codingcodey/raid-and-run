@@ -30,6 +30,11 @@ const COIN_FRAME_SECONDS = 0.12;
 const COIN_CELL_HEIGHT = 42;
 const COIN_SHADOW_WIDTH = 42;
 const COIN_HUD_HEIGHT = 30;
+const HEART_FRAME_SECONDS = 0.09;
+const HEART_CELL_HEIGHT = 44;
+const HEART_SHADOW_WIDTH = 40;
+const HEART_HUD_HEIGHT = 26;
+const INVINCIBILITY_FLASH_SECONDS = 0.09;
 const GAME_OVER_BANNER_X = 35;
 const GAME_OVER_BANNER_Y = 100;
 const GAME_OVER_BANNER_WIDTH = 350;
@@ -116,6 +121,8 @@ const playerSprites: Record<PlayerLoopName, SpriteFrame[]> = {
 };
 const playerShadow = createSpriteFrame(assetPath("assets/player-shadow.png"));
 const coinSprites = createNumberedSpriteFrames("assets/coin", 6);
+// Rotation loop: sheet's top row left-to-right, then bottom row left-to-right.
+const heartSprites = createNumberedSpriteFrames("assets/heart", 12);
 const warningSprites = createNumberedSpriteFrames("assets/warning", 3);
 const gameOverBanner = createSpriteFrame(assetPath("assets/game-over-banner.png"));
 const scoreBanner = createSpriteFrame(assetPath("assets/score-banner.png"));
@@ -168,6 +175,11 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState): voi
   drawWarnings(ctx, state.fireballs, state.elapsed);
   drawSpikeTrap(ctx, state.spikeTrap);
   drawCoinInCell(ctx, state.coin, state.elapsed);
+
+  if (state.heart) {
+    drawHeartInCell(ctx, state.heart, state.elapsed);
+  }
+
   drawFireballs(ctx, state.fireballs, state.elapsed);
   drawPlayer(ctx, state, state.gameStatus === "gameOver");
   drawHud(ctx, state);
@@ -231,6 +243,10 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState): void {
   }
 
   drawPixelText(ctx, String(state.score), 178, 76, 34, "#fff7d7", "left");
+
+  if (state.hasExtraLife && !drawAnimatedHeart(ctx, 56, 76, HEART_HUD_HEIGHT, 0)) {
+    drawProceduralHeart(ctx, 56, 76, 3);
+  }
 
   drawPixelText(ctx, `BEST ${state.bestScore}`, 28, 126, 15, "#d8e5ec", "left", "#122132");
   drawPixelText(ctx, `WR ${state.worldRecord}`, 392, 126, 15, "#d8e5ec", "right", "#122132");
@@ -386,6 +402,54 @@ function drawCoinInCell(ctx: CanvasRenderingContext2D, cell: Cell, elapsed: numb
   }
 }
 
+function drawHeartInCell(ctx: CanvasRenderingContext2D, cell: Cell, elapsed: number): void {
+  const center = cellCenter(cell);
+
+  drawShadow(ctx, center.x, center.y + 17, HEART_SHADOW_WIDTH);
+
+  if (!drawAnimatedHeart(ctx, center.x, center.y - 2, HEART_CELL_HEIGHT, elapsed)) {
+    drawProceduralHeart(ctx, center.x, center.y - 2, 4);
+  }
+}
+
+function drawAnimatedHeart(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  targetHeight: number,
+  elapsed: number,
+): boolean {
+  const frame = heartSprites[Math.floor(elapsed / HEART_FRAME_SECONDS) % heartSprites.length];
+
+  if (!frame.ready || !frame.image || frame.image.naturalWidth === 0) {
+    return false;
+  }
+
+  const width = Math.round((frame.image.naturalWidth / frame.image.naturalHeight) * targetHeight);
+  const height = Math.round(targetHeight);
+
+  ctx.drawImage(frame.image, Math.round(centerX - width / 2), Math.round(centerY - height / 2), width, height);
+
+  return true;
+}
+
+function drawProceduralHeart(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, scale: number): void {
+  const s = scale;
+  const x = centerX - 5 * s;
+  const y = centerY - 4 * s;
+
+  ctx.fillStyle = "#e8251f";
+  ctx.fillRect(x + s, y, 3 * s, s);
+  ctx.fillRect(x + 6 * s, y, 3 * s, s);
+  ctx.fillRect(x, y + s, 10 * s, 3 * s);
+  ctx.fillRect(x + s, y + 4 * s, 8 * s, s);
+  ctx.fillRect(x + 2 * s, y + 5 * s, 6 * s, s);
+  ctx.fillRect(x + 3 * s, y + 6 * s, 4 * s, s);
+  ctx.fillRect(x + 4 * s, y + 7 * s, 2 * s, s);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x + 2 * s, y + s, s, s);
+}
+
 function drawFireballs(ctx: CanvasRenderingContext2D, fireballs: Fireball[], elapsed: number): void {
   for (const fireball of fireballs) {
     if (fireball.age < fireball.warningDuration) {
@@ -530,6 +594,14 @@ function drawProceduralFireball(ctx: CanvasRenderingContext2D, x: number, y: num
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, isGameOver: boolean): void {
+  const isFlashHidden =
+    state.invincibilityRemaining > 0
+    && Math.floor(state.elapsed / INVINCIBILITY_FLASH_SECONDS) % 2 === 0;
+
+  if (isFlashHidden && !isGameOver) {
+    return;
+  }
+
   const loopName: PlayerLoopName = state.playerFacing === "left" ? "left" : "default";
   const frames = playerSprites[loopName];
   const frame = frames[Math.floor(state.elapsed / PLAYER_FRAME_SECONDS) % frames.length];

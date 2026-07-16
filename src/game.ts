@@ -7,6 +7,8 @@ export const FIREBALL_COLLISION_RADIUS = 0.42;
 export const BENDING_FIREBALL_CHANCE = 0.02;
 export const FAST_FIREBALL_CHANCE = 0.02;
 export const SPIKE_TRAP_CHANCE = 0.02;
+export const HEART_CHANCE = 0.02;
+export const EXTRA_LIFE_INVINCIBILITY_SECONDS = 1.5;
 export const SPIKE_TRAP_WARNING_DURATION = 2;
 export const SPIKE_TRAP_ACTIVE_DURATION = 4;
 export const FAST_FIREBALL_COUNT = 3;
@@ -39,7 +41,7 @@ export function createInitialGameState(records: RecordsSnapshot, random: RandomS
   return {
     player,
     playerFacing: "down",
-    coin: spawnCoin(player, null, null, random),
+    coin: spawnCoin(player, null, null, null, random),
     previousCoin: null,
     fireballs: [],
     score: INITIAL_SCORE,
@@ -53,6 +55,9 @@ export function createInitialGameState(records: RecordsSnapshot, random: RandomS
     bendingFireballCooldown: 0,
     fastFireballSequenceActive: false,
     spikeTrap: null,
+    heart: null,
+    hasExtraLife: false,
+    invincibilityRemaining: 0,
   };
 }
 
@@ -72,6 +77,10 @@ export function movePlayer(state: GameState, direction: Direction, random: Rando
   const player = clampCell(stepCell(state.player, direction));
   let nextState: GameState = { ...state, player, playerFacing: direction };
 
+  if (nextState.heart !== null && cellsEqual(player, nextState.heart)) {
+    nextState = { ...nextState, heart: null, hasExtraLife: true };
+  }
+
   if (cellsEqual(player, nextState.coin)) {
     const score = nextState.score + 1;
     const previousCoin = nextState.coin;
@@ -80,13 +89,13 @@ export function movePlayer(state: GameState, direction: Direction, random: Rando
       ...nextState,
       score,
       previousCoin,
-      coin: spawnCoin(player, previousCoin, nextState.spikeTrap, random),
+      coin: spawnCoin(player, previousCoin, nextState.spikeTrap, nextState.heart, random),
       fireballSpawnClock: state.score === 0 ? 0 : nextState.fireballSpawnClock,
       nextFireballDelay: state.score === 0 ? scheduleFireballDelay(score) : nextState.nextFireballDelay,
     };
   }
 
-  return isPlayerHit(nextState) ? markGameOver(nextState) : nextState;
+  return resolvePlayerHit(nextState);
 }
 
 export function updateGame(state: GameState, deltaSeconds: number, random: RandomSource = Math.random): GameState {
@@ -101,6 +110,7 @@ export function updateGame(state: GameState, deltaSeconds: number, random: Rando
       .map((fireball) => updateFireball(fireball, state.player, deltaSeconds))
       .filter((fireball) => fireball.age <= fireball.warningDuration + fireball.travelDuration),
     spikeTrap: updateSpikeTrap(state.spikeTrap, deltaSeconds),
+    invincibilityRemaining: Math.max(0, state.invincibilityRemaining - deltaSeconds),
   };
 
   if (state.fastFireballSequenceActive && !nextState.fireballs.some((fireball) => fireball.kind === "fast")) {
@@ -116,11 +126,20 @@ export function updateGame(state: GameState, deltaSeconds: number, random: Rando
     nextState = advanceFireballSpawner(nextState, deltaSeconds, random);
   }
 
-  return isPlayerHit(nextState) ? markGameOver(nextState) : nextState;
+  return resolvePlayerHit(nextState);
 }
 
-export function spawnCoin(player: Cell, previousCoin: Cell | null, spikeTrap: SpikeTrap | null, random: RandomSource = Math.random): Cell {
-  const isBlocked = (cell: Cell) => cellsEqual(cell, player) || (spikeTrap !== null && cellsEqual(cell, spikeTrap.cell));
+export function spawnCoin(
+  player: Cell,
+  previousCoin: Cell | null,
+  spikeTrap: SpikeTrap | null,
+  heart: Cell | null,
+  random: RandomSource = Math.random,
+): Cell {
+  const isBlocked = (cell: Cell) =>
+    cellsEqual(cell, player)
+    || (spikeTrap !== null && cellsEqual(cell, spikeTrap.cell))
+    || (heart !== null && cellsEqual(cell, heart));
   const preferredCells = ALL_CELLS.filter((cell) => !isBlocked(cell) && (!previousCoin || !cellsEqual(cell, previousCoin)));
   const fallbackCells = ALL_CELLS.filter((cell) => !isBlocked(cell));
   const candidates = preferredCells.length > 0 ? preferredCells : fallbackCells;
@@ -211,8 +230,10 @@ export function createFastFireballs(score: number, startingId: number, random: R
   });
 }
 
-export function createSpikeTrap(random: RandomSource = Math.random, coin: Cell | null = null): SpikeTrap {
-  const candidates = coin ? ALL_CELLS.filter((cell) => !cellsEqual(cell, coin)) : ALL_CELLS;
+export function createSpikeTrap(random: RandomSource = Math.random, coin: Cell | null = null, heart: Cell | null = null): SpikeTrap {
+  const candidates = ALL_CELLS.filter(
+    (cell) => (!coin || !cellsEqual(cell, coin)) && (!heart || !cellsEqual(cell, heart)),
+  );
   const cell = candidates[randomInt(candidates.length, random)];
 
   return {
@@ -221,6 +242,17 @@ export function createSpikeTrap(random: RandomSource = Math.random, coin: Cell |
     warningDuration: SPIKE_TRAP_WARNING_DURATION,
     activeDuration: SPIKE_TRAP_ACTIVE_DURATION,
   };
+}
+
+export function spawnHeart(player: Cell, coin: Cell, spikeTrap: SpikeTrap | null, random: RandomSource = Math.random): Cell {
+  const candidates = ALL_CELLS.filter(
+    (cell) =>
+      !cellsEqual(cell, player)
+      && !cellsEqual(cell, coin)
+      && (spikeTrap === null || !cellsEqual(cell, spikeTrap.cell)),
+  );
+
+  return { ...candidates[randomInt(candidates.length, random)] };
 }
 
 export function isSpikeTrapActive(spikeTrap: SpikeTrap): boolean {
@@ -285,6 +317,22 @@ export function isPlayerHit(state: GameState): boolean {
     || (state.spikeTrap !== null && isSpikeTrapActive(state.spikeTrap) && cellsEqual(state.player, state.spikeTrap.cell));
 }
 
+function resolvePlayerHit(state: GameState): GameState {
+  if (state.invincibilityRemaining > 0 || !isPlayerHit(state)) {
+    return state;
+  }
+
+  if (state.hasExtraLife) {
+    return {
+      ...state,
+      hasExtraLife: false,
+      invincibilityRemaining: EXTRA_LIFE_INVINCIBILITY_SECONDS,
+    };
+  }
+
+  return markGameOver(state);
+}
+
 export function scheduleFireballDelay(score: number): number {
   if (score >= 100) {
     return 0.4;
@@ -347,7 +395,23 @@ function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: 
         nextFireballDelay: scheduleFireballDelay(state.score),
         nextFireballId,
         bendingFireballCooldown,
-        spikeTrap: createSpikeTrap(random, state.coin),
+        spikeTrap: createSpikeTrap(random, state.coin, state.heart),
+      };
+    }
+
+    const heartStartsAt = spikeTrapThreshold;
+    const heartThreshold = heartStartsAt + HEART_CHANCE;
+    const canSpawnHeart = state.heart === null && !state.hasExtraLife;
+
+    if (canSpawnHeart && specialFireballRoll >= heartStartsAt && specialFireballRoll < heartThreshold) {
+      return {
+        ...state,
+        fireballs,
+        fireballSpawnClock: 0,
+        nextFireballDelay: scheduleFireballDelay(state.score),
+        nextFireballId,
+        bendingFireballCooldown,
+        heart: spawnHeart(state.player, state.coin, state.spikeTrap, random),
       };
     }
 

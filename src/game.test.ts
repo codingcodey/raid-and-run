@@ -12,6 +12,8 @@ import {
   createFastFireballs,
   createFireball,
   createSpikeTrap,
+  EXTRA_LIFE_INVINCIBILITY_SECONDS,
+  HEART_CHANCE,
   createInitialGameState,
   createSpawnedFireball,
   FAST_FIREBALL_CHANCE,
@@ -31,6 +33,7 @@ import {
   scheduleFireballDelay,
   scheduleFireballTravelDuration,
   spawnCoin,
+  spawnHeart,
   updateGame,
 } from "./game";
 import { MemoryRecordsStore } from "./records";
@@ -154,8 +157,8 @@ describe("fireballs", () => {
     };
 
     const afterCoin = movePlayer(state, "right", fixedRandom(0));
-    const beforeDelay = updateGame(afterCoin, 1.49, fixedRandom(0.5));
-    const afterDelay = updateGame(afterCoin, 1.5, fixedRandom(0.5));
+    const beforeDelay = updateGame(afterCoin, 1.49, fixedRandom(0.99));
+    const afterDelay = updateGame(afterCoin, 1.5, fixedRandom(0.99));
 
     expect(beforeDelay.fireballs).toHaveLength(0);
     expect(afterDelay.score).toBe(1);
@@ -171,8 +174,8 @@ describe("fireballs", () => {
       nextFireballDelay: scheduleFireballDelay(25),
     };
 
-    const beforeDelay = updateGame(state, 0.79, fixedRandom(0.5));
-    const afterDelay = updateGame(state, 0.8, fixedRandom(0.5));
+    const beforeDelay = updateGame(state, 0.79, fixedRandom(0.99));
+    const afterDelay = updateGame(state, 0.8, fixedRandom(0.99));
 
     expect(scheduleFireballDelay(1)).toBe(1.5);
     expect(scheduleFireballDelay(9)).toBe(1.5);
@@ -274,7 +277,7 @@ describe("fireballs", () => {
 
   it("does not spawn a coin on the spike trap's cell", () => {
     const trap = createSpikeTrap(fixedRandom(0));
-    const coin = spawnCoin({ row: 2, col: 2 }, null, trap, fixedRandom(0));
+    const coin = spawnCoin({ row: 2, col: 2 }, null, trap, null, fixedRandom(0));
 
     expect(trap.cell).toEqual({ row: 0, col: 0 });
     expect(coin).not.toEqual(trap.cell);
@@ -309,8 +312,8 @@ describe("fireballs", () => {
     const warningState = updateGame(state, 1.5, fixedRandom(0));
     const duringWarning = updateGame(warningState, 2.99, fixedRandom(0.5));
     const launchedState = updateGame(warningState, FAST_FIREBALL_WARNING_DURATION, fixedRandom(0.5));
-    const eventComplete = updateGame(launchedState, scheduleFireballTravelDuration(1) / FAST_FIREBALL_SPEED_RATIO + 0.1, fixedRandom(0.5));
-    const resumedState = updateGame(eventComplete, 0.2, fixedRandom(0.5));
+    const eventComplete = updateGame(launchedState, scheduleFireballTravelDuration(1) / FAST_FIREBALL_SPEED_RATIO + 0.1, fixedRandom(0.99));
+    const resumedState = updateGame(eventComplete, 0.2, fixedRandom(0.99));
 
     expect(warningState.fastFireballSequenceActive).toBe(true);
     expect(warningState.fireballs).toHaveLength(FAST_FIREBALL_COUNT);
@@ -511,6 +514,131 @@ describe("fireballs", () => {
 
     expect(nextState.fireballs).toHaveLength(0);
     expect(nextState.gameStatus).toBe("playing");
+  });
+});
+
+describe("hearts and extra lives", () => {
+  it("spawns a heart from its dedicated special-spawn range", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+    };
+    const heartState = updateGame(state, 1.5, sequenceRandom([0.065, 0.99]));
+
+    expect(HEART_CHANCE).toBe(0.02);
+    expect(heartState.fireballs).toHaveLength(0);
+    expect(heartState.heart).toEqual({ row: 4, col: 4 });
+    expect(heartState.hasExtraLife).toBe(false);
+  });
+
+  it("never places a heart on the player, coin, or spike trap", () => {
+    const trap = { ...createSpikeTrap(fixedRandom(0)), cell: { row: 4, col: 4 } };
+    const heart = spawnHeart({ row: 4, col: 2 }, { row: 4, col: 3 }, trap, fixedRandom(0.999));
+
+    expect(heart).toEqual({ row: 4, col: 1 });
+  });
+
+  it("does not spawn a heart while one is on the board and keeps spawning fireballs", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+      heart: { row: 0, col: 4 },
+    };
+    const nextState = updateGame(state, 1.5, sequenceRandom([0.065, 0.99]));
+
+    expect(nextState.heart).toEqual({ row: 0, col: 4 });
+    expect(nextState.fireballs).toHaveLength(1);
+    expect(nextState.fireballs[0].kind).toBe("normal");
+  });
+
+  it("does not spawn a heart while the player already holds an extra life", () => {
+    const state: GameState = {
+      ...baseState(),
+      score: 1,
+      nextFireballDelay: scheduleFireballDelay(1),
+      hasExtraLife: true,
+    };
+    const nextState = updateGame(state, 1.5, sequenceRandom([0.065, 0.99]));
+
+    expect(nextState.heart).toBeNull();
+    expect(nextState.fireballs).toHaveLength(1);
+  });
+
+  it("grants an extra life when the player walks onto the heart", () => {
+    const state: GameState = {
+      ...baseState(),
+      player: { row: 2, col: 2 },
+      coin: { row: 0, col: 0 },
+      heart: { row: 2, col: 3 },
+    };
+    const nextState = movePlayer(state, "right", fixedRandom(0));
+
+    expect(nextState.hasExtraLife).toBe(true);
+    expect(nextState.heart).toBeNull();
+    expect(nextState.score).toBe(0);
+  });
+
+  it("does not spawn a coin on the heart's cell", () => {
+    const coin = spawnCoin({ row: 2, col: 2 }, null, null, { row: 0, col: 0 }, fixedRandom(0));
+
+    expect(coin).toEqual({ row: 0, col: 1 });
+  });
+
+  it("does not spawn a spike trap on the heart's cell", () => {
+    const trap = createSpikeTrap(fixedRandom(0), null, { row: 0, col: 0 });
+
+    expect(trap.cell).toEqual({ row: 0, col: 1 });
+  });
+
+  it("consumes the extra life on a hit, flashes invincible, and keeps playing", () => {
+    const travelDuration = scheduleFireballTravelDuration(1);
+    const fireball = fireballFixture({
+      edge: "left",
+      lane: 2,
+      age: FIREBALL_WARNING_DURATION + travelDuration / 2,
+      travelDuration,
+    });
+    const state: GameState = {
+      ...baseState(),
+      player: { row: 2, col: 2 },
+      fireballs: [fireball],
+      score: 1,
+      nextFireballDelay: 100,
+      hasExtraLife: true,
+    };
+
+    const survivedState = updateGame(state, 0, fixedRandom(0));
+
+    expect(survivedState.gameStatus).toBe("playing");
+    expect(survivedState.hasExtraLife).toBe(false);
+    expect(survivedState.invincibilityRemaining).toBe(EXTRA_LIFE_INVINCIBILITY_SECONDS);
+
+    const stillInvincible = updateGame(survivedState, 0.1, fixedRandom(0));
+    expect(stillInvincible.gameStatus).toBe("playing");
+    expect(stillInvincible.invincibilityRemaining).toBeCloseTo(EXTRA_LIFE_INVINCIBILITY_SECONDS - 0.1);
+  });
+
+  it("dies normally once invincibility has expired and no extra life remains", () => {
+    const travelDuration = scheduleFireballTravelDuration(1);
+    const fireball = fireballFixture({
+      edge: "left",
+      lane: 2,
+      age: FIREBALL_WARNING_DURATION + travelDuration / 2,
+      travelDuration,
+    });
+    const state: GameState = {
+      ...baseState(),
+      player: { row: 2, col: 2 },
+      fireballs: [fireball],
+      score: 1,
+      nextFireballDelay: 100,
+      invincibilityRemaining: 0.01,
+    };
+
+    expect(updateGame(state, 0, fixedRandom(0)).gameStatus).toBe("playing");
+    expect(updateGame(state, 0.02, fixedRandom(0)).gameStatus).toBe("gameOver");
   });
 });
 

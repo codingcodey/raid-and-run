@@ -49,6 +49,9 @@ export interface GameState {
   bendingFireballCooldown: number;
   fastFireballSequenceActive: boolean;
   spikeTrap: SpikeTrap | null;
+  heart: Cell | null;
+  hasExtraLife: boolean;
+  invincibilityRemaining: number;
 }
 
 export interface RecordsSnapshot {
