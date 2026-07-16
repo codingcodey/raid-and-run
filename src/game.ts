@@ -354,7 +354,7 @@ export function scheduleFireballDelay(score: number): number {
 }
 
 export function scheduleFireballTravelDuration(score: number): number {
-  return Math.max(2.18, 3.74 - Math.min(score, 28) * 0.048125);
+  return Math.max(2, 4 - Math.min(score, 50) * 0.04);
 }
 
 function advanceFireballSpawner(state: GameState, deltaSeconds: number, random: RandomSource): GameState {
